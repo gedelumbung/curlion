@@ -2,7 +2,18 @@
 // Collection.items holds a tree of folders and requests; this tree is what
 // gets stored in Supabase `collections.tree_data` (as { items }).
 
-export const uid = () => crypto.randomUUID()
+/**
+ * Random UUID v4. crypto.randomUUID only exists in secure contexts (https / localhost),
+ * so fall back to getRandomValues when Beacon is served over plain http on a LAN host.
+ */
+export function uid() {
+  if (typeof crypto.randomUUID === 'function') return crypto.randomUUID()
+  const b = crypto.getRandomValues(new Uint8Array(16))
+  b[6] = (b[6] & 0x0f) | 0x40
+  b[8] = (b[8] & 0x3f) | 0x80
+  const h = [...b].map((x) => x.toString(16).padStart(2, '0')).join('')
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`
+}
 
 export const clone = (v) => JSON.parse(JSON.stringify(v))
 

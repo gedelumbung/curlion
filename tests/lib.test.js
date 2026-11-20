@@ -248,3 +248,23 @@ test('buildScope: per-user current values override shared initial values', () =>
   assert.equal(s.get('region').value, 'eu', 'empty current value falls back to the initial value')
   assert.equal(interpolate('{{baseUrl}}/me?t={{token}}', s), 'https://shared.test/me?t=my-token')
 })
+
+import { addressSpace } from '../src/lib/http.js'
+test('addressSpace classifies loopback, local network and public hosts', () => {
+  for (const u of ['http://localhost:3000/x', 'http://127.0.0.1:8080', 'http://[::1]:3000/', 'http://api.localhost/']) assert.equal(addressSpace(u), 'loopback', u)
+  for (const u of ['http://192.168.1.20:8080', 'http://10.0.0.5/', 'http://172.20.1.1', 'http://printer.local/', 'http://intranet/', 'http://[fd00::1]/']) assert.equal(addressSpace(u), 'local', u)
+  for (const u of ['https://dummyjson.com', 'http://172.32.0.1/', 'https://api.example.com:8443/v1', 'not a url']) assert.equal(addressSpace(u), 'public', u)
+})
+
+import { uid } from '../src/lib/model.js'
+test('uid works without crypto.randomUUID (plain-http LAN hosting)', () => {
+  const orig = crypto.randomUUID
+  try {
+    Object.defineProperty(crypto, 'randomUUID', { value: undefined, configurable: true })
+    const id = uid()
+    assert.match(id, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
+    assert.notEqual(uid(), id)
+  } finally {
+    Object.defineProperty(crypto, 'randomUUID', { value: orig, configurable: true })
+  }
+})

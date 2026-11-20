@@ -1,4 +1,5 @@
 // {{variable}} interpolation, dynamic built-in variables and JSON path lookup.
+import { uid } from './model.js'
 
 export const VAR_RE = /\{\{\s*([^{}\s]+)\s*\}\}/g
 
@@ -7,8 +8,8 @@ const DOMAINS = ['example.com', 'mail.test', 'demo.dev']
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)]
 
 export const DYNAMIC_VARS = {
-  $uuid: () => crypto.randomUUID(),
-  $guid: () => crypto.randomUUID(),
+  $uuid: () => uid(),
+  $guid: () => uid(),
   $timestamp: () => String(Math.floor(Date.now() / 1000)),
   $isoTimestamp: () => new Date().toISOString(),
   $randomInt: () => String(Math.floor(Math.random() * 1000) + 1),
