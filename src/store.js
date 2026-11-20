@@ -29,7 +29,6 @@ export const state = reactive({
   errors: {}, // requestId -> error message of its last send
   history: [],
   user: null,
-  roles: {}, // collectionId -> 'editor' | 'viewer' for collections shared with me
   authReady: !supabase, // true once the Supabase session (if any) has been checked
   sync: { status: supabase ? 'signed-out' : 'local', message: '', lastAt: null },
   toasts: [],
@@ -63,12 +62,16 @@ export const openTabs = computed(() =>
   }),
 )
 
-/** 'owner' | 'editor' | 'viewer' (local-only collections count as owner). */
+/**
+ * Team workspace: every signed-in user can see and edit every collection.
+ * 'owner' = created it (can delete it and publish its docs), 'editor' = anyone else.
+ * Local-only and not-yet-synced collections count as owner.
+ */
 export function roleOf(col) {
-  if (!col) return 'owner'
-  return state.roles[col.id] || 'owner'
+  if (!col || !col.ownerId || !state.user) return 'owner'
+  return col.ownerId === state.user.id ? 'owner' : 'editor'
 }
-export const canEdit = (col) => roleOf(col) !== 'viewer'
+export const canEdit = (col) => !!col
 
 // ---- Toasts -------------------------------------------------------------
 
@@ -355,16 +358,14 @@ export function addCollection(col) {
 export async function deleteCollection(id) {
   const i = state.collections.findIndex((c) => c.id === id)
   if (i === -1) return
+  if (roleOf(state.collections[i]) !== 'owner') return // only the creator can delete a collection
   const [col] = state.collections.splice(i, 1)
   closeTabs((t) => t.collectionId === id)
   await db.collections.delete(id)
-  if (state.roles[id]) {
-    // shared with me: "delete" means leave the collection
-    delete state.roles[id]
-    if (supabase && state.user) await supabase.from('collection_members').delete().eq('collection_id', id).eq('user_id', state.user.id)
-    return
+  if (col.syncedAt) {
+    await logEvent('DELETE_COLLECTION', { collectionId: id, collectionName: col.name, targetName: col.name, metadata: { requests: countRequests(col.items) } })
+    await db.tombstones.put({ id, table: 'collections' })
   }
-  if (col.syncedAt) await db.tombstones.put({ id, table: 'collections' })
   scheduleSync('tombstones', 'all')
 }
 
@@ -400,8 +401,10 @@ export function addRequest(col, parentId, req = newRequest()) {
 }
 
 export function renameNode(col, id, name) {
-  if (id === col.id) col.name = name
-  else {
+  if (id === col.id) {
+    if (col.name !== name && col.syncedAt) queueLogs(col.id, [{ action: 'RENAME_COLLECTION', target_name: name, metadata: { from: col.name, to: name } }])
+    col.name = name
+  } else {
     const hit = findNode(col.items, id)
     if (hit) hit.node.name = name
   }
@@ -615,7 +618,6 @@ async function clearLocalData() {
     responses: {},
     pending: {},
     errors: {},
-    roles: {},
   })
 }
 
@@ -708,11 +710,6 @@ export async function syncAll() {
     if (e1) throw e1
     if (e2) throw e2
 
-    // Which of these collections are shared with me, and with what role?
-    const { data: memberships, error: e3 } = await supabase.from('collection_members').select('collection_id, role').eq('user_id', state.user.id)
-    if (e3) throw e3
-    state.roles = Object.fromEntries(memberships.map((m) => [m.collection_id, m.role]))
-
     const remoteCols = rCols.map(rowToCollection)
     // activity baseline = what the cloud had before this sync
     for (const r of remoteCols) if (!activityBase.has(r.id)) activityBase.set(r.id, clone(r.items))
@@ -750,10 +747,9 @@ async function mergeList(localList, remoteList, table, push) {
     if (!remote) {
       if (mine && local.syncedAt) await drop() // deleted on another device
       else if (mine) await push(local) // never synced: upload
-      else if (local.syncedBy === state.user.id) await drop() // shared with me, access revoked
-      // else: data of another account that used this browser earlier, leave it alone
-    } else if (state.roles[local.id] === 'viewer' || (remote.updatedAt || '') > (local.updatedAt || '')) {
-      Object.assign(local, remote) // viewers always take the cloud version
+      else await drop() // someone else's collection that was deleted by its creator
+    } else if ((remote.updatedAt || '') > (local.updatedAt || '')) {
+      Object.assign(local, remote)
       await db[table].put(plain(local))
     } else if ((local.updatedAt || '') > (remote.updatedAt || '')) {
       await push(local)
@@ -793,6 +789,7 @@ export async function signOut() {
     }
   }
   if (state.sync.status === 'error' && !confirm(`Some changes could not be synced (${state.sync.message}). Sign out anyway? They will be lost.`)) return
+  await logEvent('SIGN_OUT')
   // 'local' drops this device's session even when offline (the refresh token is still revoked server-side)
   await supabase?.auth.signOut({ scope: 'local' })
   await clearLocalData()
@@ -824,7 +821,7 @@ async function flushActivity(colId) {
   const extra = pendingLogs.get(colId) || []
   const base = activityBase.get(colId)
   const diff = base ? diffTrees(base, col.items) : []
-  const rows = [...extra, ...diff].map((e) => ({ ...e, collection_id: colId, actor_id: state.user.id, actor_email: state.user.email }))
+  const rows = [...extra, ...diff].map((e) => ({ ...e, collection_id: colId, collection_name: col.name, actor_id: state.user.id, actor_email: state.user.email }))
   if (!rows.length) return
   const { error } = await supabase.from('activity_logs').insert(rows)
   if (error) {
@@ -845,33 +842,51 @@ if (typeof document !== 'undefined') {
   document.addEventListener('visibilitychange', () => document.visibilityState === 'hidden' && flushAllActivity())
 }
 
+/** Write one activity entry right away (account events, collection deletion). */
+async function logEvent(action, { user = state.user, collectionId = null, collectionName = null, targetName, metadata = {} } = {}) {
+  if (!supabase || !user) return
+  const { error } = await supabase.from('activity_logs').insert({
+    action,
+    target_name: targetName ?? user.email,
+    collection_id: collectionId,
+    collection_name: collectionName,
+    actor_id: user.id,
+    actor_email: user.email,
+    metadata,
+  })
+  if (error) console.warn('activity log failed', error)
+}
+
+/** Called by the login form after a successful email/password sign-in. */
+export const logSignIn = (user) => logEvent('SIGN_IN', { user })
+
+/**
+ * Activity across the whole workspace, newest first (activity dashboard).
+ * filters: { actorId, collectionId, action, since (ISO), search, before (ISO, for paging) }
+ */
+export async function fetchAllActivity(filters = {}, limit = 200) {
+  await flushAllActivity()
+  let q = supabase.from('activity_logs').select('*').order('created_at', { ascending: false }).limit(limit)
+  if (filters.actorId) q = q.eq('actor_id', filters.actorId)
+  if (filters.collectionId === '__account__') q = q.is('collection_id', null).in('action', ['SIGN_IN', 'SIGN_OUT'])
+  else if (filters.collectionId) q = q.eq('collection_id', filters.collectionId)
+  if (filters.action) q = q.eq('action', filters.action)
+  if (filters.since) q = q.gte('created_at', filters.since)
+  if (filters.before) q = q.lt('created_at', filters.before)
+  if (filters.search?.trim()) {
+    const term = filters.search.trim().replace(/[%,()]/g, ' ')
+    q = q.or(`target_name.ilike.%${term}%,collection_name.ilike.%${term}%,actor_email.ilike.%${term}%`)
+  }
+  const { data, error } = await q
+  if (error) throw error
+  return data
+}
+
 export async function fetchActivity(colId, limit = 100) {
   await flushActivity(colId)
   const { data, error } = await supabase.from('activity_logs').select('*').eq('collection_id', colId).order('created_at', { ascending: false }).limit(limit)
   if (error) throw error
   return data
-}
-
-// ---- Collaboration ------------------------------------------------------
-
-export async function listMembers(colId) {
-  const { data, error } = await supabase.rpc('list_collection_members', { p_collection_id: colId })
-  if (error) throw error
-  return data
-}
-
-/** Invite by email, or change an existing member's role. */
-export async function inviteMember(col, email, role) {
-  await ensureSynced(col)
-  const { error } = await supabase.rpc('invite_collection_member', { p_collection_id: col.id, p_email: email, p_role: role })
-  if (error) throw error
-  queueLogs(col.id, [{ action: 'ADD_MEMBER', target_name: email, metadata: { role } }])
-}
-
-export async function removeMember(col, member) {
-  const { error } = await supabase.from('collection_members').delete().eq('collection_id', col.id).eq('user_id', member.user_id)
-  if (error) throw error
-  queueLogs(col.id, [{ action: 'REMOVE_MEMBER', target_name: member.email, metadata: {} }])
 }
 
 async function ensureSynced(col) {

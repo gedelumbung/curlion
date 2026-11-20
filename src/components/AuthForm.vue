@@ -3,6 +3,7 @@
 <script setup>
 import { ref } from 'vue'
 import { supabase } from '../lib/supabase.js'
+import { logSignIn } from '../store.js'
 
 const email = ref('')
 const password = ref('')
@@ -13,8 +14,9 @@ async function submit() {
   busy.value = true
   error.value = ''
   try {
-    const { error: e } = await supabase.auth.signInWithPassword({ email: email.value, password: password.value })
+    const { data, error: e } = await supabase.auth.signInWithPassword({ email: email.value, password: password.value })
     if (e) throw e
+    logSignIn(data.user) // activity dashboard
     // a successful sign-in is picked up through supabase.auth.onAuthStateChange
   } catch (e) {
     error.value = e.message === 'Invalid login credentials' ? 'Wrong email or password.' : e.message

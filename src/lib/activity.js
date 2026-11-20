@@ -3,7 +3,11 @@
 // what actually reached the cloud, and lets rapid edits collapse into one entry.
 
 export const ACTIONS = {
+  SIGN_IN: 'Signed in',
+  SIGN_OUT: 'Signed out',
   CREATE_COLLECTION: 'Created collection',
+  RENAME_COLLECTION: 'Renamed collection',
+  DELETE_COLLECTION: 'Deleted collection',
   IMPORT_COLLECTION: 'Imported collection',
   CREATE_REQUEST: 'Created request',
   UPDATE_REQUEST: 'Updated request',
@@ -95,6 +99,7 @@ export function describeLog(log) {
       return parts.join(' · ')
     }
     case 'RENAME_FOLDER':
+    case 'RENAME_COLLECTION':
       return `${m.from} → ${m.to}`
     case 'CREATE_REQUEST':
     case 'DELETE_REQUEST':
@@ -105,6 +110,7 @@ export function describeLog(log) {
       return `${m.status} on "${m.request}"`
     case 'IMPORT_COLLECTION':
     case 'CREATE_COLLECTION':
+    case 'DELETE_COLLECTION':
       return m.requests !== undefined ? `${m.requests} request(s)` : ''
     case 'PUBLISH_DOCS':
       return m.slug ? `/docs/${m.slug}` : ''
@@ -121,3 +127,22 @@ const short = (s, n = 40) => {
 }
 
 export { countRequests }
+
+/** Badge colour classes for an action. */
+export function actionColor(a) {
+  if (a === 'SIGN_IN' || a === 'SIGN_OUT') return 'text-zinc-300 bg-zinc-500/15'
+  if (a.startsWith('DELETE') || a === 'REMOVE_MEMBER' || a === 'UNPUBLISH_DOCS') return 'text-red-400 bg-red-500/10'
+  if (a.startsWith('CREATE') || a === 'IMPORT_COLLECTION' || a === 'ADD_MOCK_SAMPLE' || a === 'ADD_MEMBER') return 'text-emerald-400 bg-emerald-500/10'
+  if (a === 'PUBLISH_DOCS') return 'text-sky-400 bg-sky-500/10'
+  return 'text-amber-400 bg-amber-500/10'
+}
+
+/** "just now", "5m ago", "3h ago", "2d ago", or a date. */
+export function ago(iso) {
+  const s = Math.round((Date.now() - new Date(iso)) / 1000)
+  if (s < 60) return 'just now'
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`
+  if (s < 7 * 86400) return `${Math.floor(s / 86400)}d ago`
+  return new Date(iso).toLocaleDateString()
+}

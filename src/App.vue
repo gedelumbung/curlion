@@ -1,6 +1,6 @@
 <script setup>
 import { onBeforeUnmount, onMounted, ref } from 'vue'
-import { Cloud, CloudOff, Globe2, Info, Loader2, LogOut, Monitor, Moon, Settings2, Sun, Zap } from 'lucide-vue-next'
+import { Activity, Cloud, CloudOff, Globe2, Info, Loader2, LogOut, Monitor, Moon, Settings2, Sun, Zap } from 'lucide-vue-next'
 import { setDark, theme } from './lib/theme.js'
 import { vTopLayer } from './lib/topLayer.js'
 import Sidebar from './components/Sidebar.vue'
@@ -12,9 +12,10 @@ import ImportModal from './components/ImportModal.vue'
 import CodeModal from './components/CodeModal.vue'
 import LoginScreen from './components/LoginScreen.vue'
 import CollectionModal from './components/CollectionModal.vue'
+import ActivityDashboard from './components/ActivityDashboard.vue'
 import { activeRequest, addNewRequest, cloudEnabled, init, openTabs, saveNow, send, setActiveEnv, setMode, signOut, state } from './store.js'
 
-const modal = ref(null) // env | import | code | collection
+const modal = ref(null) // env | import | code | collection | activity
 const collectionCtx = ref(null) // { col, tab }
 function openCollection(ctx) {
   collectionCtx.value = ctx
@@ -158,6 +159,11 @@ const syncLabel = {
           </span>
         </button>
 
+        <!-- Workspace activity log -->
+        <button v-if="cloudEnabled && state.user" class="inline-flex items-center gap-1.5 rounded-md border border-zinc-700 px-2 py-1 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100" title="Activity log: who changed what" @click="modal = 'activity'">
+          <Activity :size="14" /> <span class="hidden lg:inline">Activity</span>
+        </button>
+
         <!-- Account / sync -->
         <template v-if="cloudEnabled">
           <div class="flex items-center gap-2 text-xs">
@@ -221,6 +227,7 @@ const syncLabel = {
     <EnvironmentModal v-if="modal === 'env'" @close="modal = null" />
     <ImportModal v-if="modal === 'import'" @close="modal = null" />
     <CodeModal v-if="modal === 'code'" @close="modal = null" />
+    <ActivityDashboard v-if="modal === 'activity'" @close="modal = null" />
     <CollectionModal v-if="modal === 'collection'" :collection="collectionCtx.col" :initial-tab="collectionCtx.tab" @close="modal = null" />
 
     <!-- Toasts: top layer, re-shown for each new toast so they sit above any open modal -->

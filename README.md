@@ -31,6 +31,7 @@ netlify dev        # runs Vite + edge functions at /api/proxy and /mock/*
    - [`003_grants.sql`](supabase/migrations/003_grants.sql): table privileges for signed-in users (newer Supabase projects do not grant these automatically, which shows up as "permission denied for table collections")
    - [`004_require_login.sql`](supabase/migrations/004_require_login.sql): removes all anonymous access; docs are readable by signed-in users only
    - [`005_admin_created_accounts.sql`](supabase/migrations/005_admin_created_accounts.sql): invite error message for admin-created accounts
+   - [`006_team_workspace.sql`](supabase/migrations/006_team_workspace.sql): every signed-in user sees and edits every collection; activity history survives collection deletion and includes sign-in/out
 2. Copy `.env.example` to `.env` and fill in `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.
 3. In Supabase → Authentication → URL Configuration, set the Site URL to your site and add `https://<your-site>/**` (and `http://localhost:5173/**` for development) to Redirect URLs, so sign-in returns to the page it started from (e.g. a docs link).
 4. Lock down sign-in (accounts are created by an administrator; there is no sign-up or OAuth):
@@ -65,7 +66,7 @@ netlify dev        # runs Vite + edge functions at /api/proxy and /mock/*
 
 ## Phase 4 features (PRD §5)
 
-All available from the collection menu in the sidebar (right-click or `⋯`): **Share & members**, **Publish docs**, **Activity log**.
+Per collection from the sidebar menu (right-click or `⋯`): **Publish docs** and **Activity log**. The workspace-wide **Activity** dashboard is in the header.
 
 | Feature | Status |
 | --- | --- |
@@ -73,9 +74,9 @@ All available from the collection menu in the sidebar (right-click or `⋯`): **
 | Update published content, change slug, Unpublish | ✅ |
 | Local docs preview `/docs/preview/<collection_id>` (no login) | ✅ |
 | Per-request (**Docs** tab) and per-collection descriptions | ✅ |
-| Invite members by email as **Viewer** / **Editor**, change role, remove member, leave a collection | ✅ |
-| Viewer: read-only (not synced, edit menus hidden), "shared" badge in the sidebar | ✅ |
-| **Activity Log**: `CREATE/UPDATE/DELETE_REQUEST`, `CREATE/RENAME/DELETE_FOLDER`, `IMPORT_COLLECTION`, `ADD_MOCK_SAMPLE`, publish/unpublish, add/remove member, with a diff summary (e.g. `method: GET → POST`, `url: … → …`) | ✅ |
+| **Team workspace**: every signed-in user sees and edits every collection; only its creator can delete it or publish its docs (a people icon in the sidebar marks collections created by others) | ✅ |
+| **Activity dashboard** (header → Activity): workspace-wide feed grouped by day, filters by period / user / collection / activity / text, per-user summary, CSV export | ✅ |
+| **Activity Log**: `CREATE/UPDATE/DELETE_REQUEST`, `CREATE/RENAME/DELETE_FOLDER`, `IMPORT_COLLECTION`, `ADD_MOCK_SAMPLE`, publish/unpublish, create/rename/delete collection, sign-in/sign-out, with a diff summary (e.g. `method: GET → POST`, `url: … → …`) | ✅ |
 
 ## Interface
 
@@ -89,8 +90,8 @@ All available from the collection menu in the sidebar (right-click or `⋯`): **
 - **Docs are a sanitized snapshot** stored in the `published_docs` table, not live collection data. Literal tokens, passwords and API keys (in auth, sensitive headers, or `api_key`/`token` query params) are replaced with placeholders. `{{variables}}` are shown by name. Environment values are never published. Docs can be read by any signed-in user who has the link; the anon role has no access to any table (the PRD's `is_public` policy is not used).
 - **Sign-in only:** with Supabase configured the app shows a login screen first. Signing out uploads pending changes and then removes that account's data from the browser; if a different account signs in, local data from the previous one is cleared first. The mock endpoint reads with the service role key on the server, since anonymous database access is closed.
 - **The activity log is computed from a diff** between the last logged tree and the tree that was just synced. Consecutive changes by one person are merged, roughly one entry per minute per collection. The log is also flushed on `Ctrl/⌘+S`, when the tab is hidden, and on logout. Only changes that actually reached the cloud are recorded.
-- **Invite by email** uses the `invite_collection_member` RPC (security definer), because `auth.users` cannot be read from the client. The invited person must already have an account.
-- Editors save changes with `UPDATE` rather than upsert, because the insert RLS policy only allows the owner.
+- **Team workspace:** RLS lets every signed-in user read and update every collection; a trigger keeps `owner_id` unchanged on update, so editing never transfers ownership. Deleting and publishing stay with the creator. Non-creators save with `UPDATE` rather than upsert, because the insert policy only allows creating your own collections. Sync is last-write-wins per collection: if two people edit the same collection at the same time, the later sync wins.
+- **Activity history is append-only** (no update/delete policies) and keeps the collection name, so entries survive when a collection is deleted.
 
 ## Structure
 
@@ -115,7 +116,7 @@ src/
 netlify/edge-functions/
   proxy.js              CORS proxy (POST /api/proxy, target in X-Beacon-* headers)
   mock.js               mock endpoint (reads with the service role key)
-supabase/migrations/    SQL schema + RLS (001 base, 002 docs/collaboration, 003 grants, 004 sign-in only, 005 invite message)
+supabase/migrations/    SQL schema + RLS (001 base, 002 docs/collaboration, 003 grants, 004 sign-in only, 005 invite message, 006 team workspace)
 tests/                  unit tests (node:test)
 ```
 

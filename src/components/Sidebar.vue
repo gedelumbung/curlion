@@ -1,6 +1,6 @@
 <script setup>
 import { computed, nextTick, ref } from 'vue'
-import { ChevronRight, Clock, Copy, Download, FilePlus, FolderPlus, Globe, History, Layers, LogOut, MoreHorizontal, Pencil, Plus, Search, Trash2, Upload, Users } from 'lucide-vue-next'
+import { ChevronRight, Clock, Copy, Download, FilePlus, FolderPlus, Globe, History, Layers, MoreHorizontal, Pencil, Plus, Search, Trash2, Upload, Users } from 'lucide-vue-next'
 import TreeNode from './TreeNode.vue'
 import {
   addNewRequest,
@@ -50,17 +50,8 @@ function openMenu(e, col, node = null) {
   const items = []
   const role = roleOf(col)
   if (!node) {
-    items.push({ icon: Users, label: 'Share & members', run: () => emit('collection', { col, tab: 'members' }) })
     items.push({ icon: Globe, label: 'Publish docs', run: () => emit('collection', { col, tab: 'publish' }) })
     items.push({ icon: History, label: 'Activity log', run: () => emit('collection', { col, tab: 'activity' }), divider: true })
-  }
-  if (role === 'viewer') {
-    if (!node) {
-      items.push({ icon: Download, label: 'Export (Postman v2.1)', run: () => downloadJson(exportPostman(col), `${col.name.replace(/[^\w-]+/g, '_')}.postman_collection.json`) })
-      items.push({ icon: LogOut, label: 'Leave collection', danger: true, run: () => confirm(`Leave "${col.name}"?`) && deleteCollection(col.id) })
-    }
-    menu.value = { x, y, items }
-    return
   }
   if (isContainer) {
     items.push({ icon: FilePlus, label: 'Add request', run: () => addRequest(col, parentId) })
@@ -77,8 +68,8 @@ function openMenu(e, col, node = null) {
     })
   } else {
     items.push({ icon: Download, label: 'Export (Postman v2.1)', run: () => downloadJson(exportPostman(col), `${col.name.replace(/[^\w-]+/g, '_')}.postman_collection.json`) })
-    if (role === 'owner') items.push({ icon: Trash2, label: 'Delete collection', danger: true, run: () => confirm(`Delete collection "${col.name}"?`) && deleteCollection(col.id) })
-    else items.push({ icon: LogOut, label: 'Leave collection', danger: true, run: () => confirm(`Leave "${col.name}"?`) && deleteCollection(col.id) })
+    // only the creator can delete a collection; everyone else can edit it
+    if (role === 'owner') items.push({ icon: Trash2, label: 'Delete collection', danger: true, run: () => confirm(`Delete collection "${col.name}" for everyone?`) && deleteCollection(col.id) })
   }
   menu.value = { x, y, items }
 }
@@ -151,7 +142,7 @@ const fmtTime = (ts) => new Date(ts).toLocaleString(undefined, { hour: '2-digit'
             <div
               class="group flex cursor-pointer items-center gap-1.5 rounded px-1 py-1 text-[13px] font-medium text-zinc-300 hover:bg-zinc-800/60"
               @click="toggleExpanded(col.id)"
-              @dblclick="roleOf(col) !== 'viewer' && beginColRename(col)"
+              @dblclick="beginColRename(col)"
               @contextmenu.prevent="openMenu($event, col)"
             >
               <ChevronRight :size="13" class="shrink-0 transition-transform" :class="{ 'rotate-90': q || state.expanded[col.id] }" />
@@ -166,7 +157,7 @@ const fmtTime = (ts) => new Date(ts).toLocaleString(undefined, { hour: '2-digit'
                 @blur="commitColRename(col)"
               />
               <span v-else class="min-w-0 flex-1 truncate">{{ col.name }}</span>
-              <span v-if="roleOf(col) !== 'owner'" class="rounded bg-sky-500/10 px-1.5 text-[10px] font-normal text-sky-400 capitalize" :title="`Shared with you as ${roleOf(col)}`">{{ roleOf(col) }}</span>
+              <Users v-if="roleOf(col) !== 'owner'" :size="12" class="shrink-0 text-sky-400" title="Created by another team member. Everyone can edit it; only its creator can delete it." />
               <Globe v-if="col.isPublic" :size="12" class="text-emerald-500" title="Docs published" />
               <button class="rounded p-0.5 opacity-0 group-hover:opacity-100 hover:bg-zinc-700" @click.stop="openMenu($event, col)"><MoreHorizontal :size="14" /></button>
             </div>

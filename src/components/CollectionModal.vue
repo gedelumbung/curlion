@@ -1,32 +1,29 @@
-<!-- Per-collection settings: members (collaboration), publish docs, activity log. -->
+<!-- Per-collection settings: publish docs, activity log. -->
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
-import { Copy, ExternalLink, Eye, History, Loader2, RefreshCw, Trash2, UserPlus, Users, Globe } from 'lucide-vue-next'
+import { Copy, ExternalLink, Eye, History, Loader2, RefreshCw, Globe } from 'lucide-vue-next'
 import Modal from './Modal.vue'
 import {
   cloudEnabled,
-  deleteCollection,
   docsPreviewUrl,
   docsUrl,
   fetchActivity,
   getPublished,
-  inviteMember,
-  listMembers,
   publishDocs,
-  removeMember,
+  canEdit,
   roleOf,
   state,
   toast,
   touchCollection,
 } from '../store.js'
-import { ACTIONS, describeLog } from '../lib/activity.js'
+import { ACTIONS, actionColor, ago, describeLog } from '../lib/activity.js'
 import { SLUG_RE, slugify } from '../lib/publish.js'
 import { copyText } from '../lib/ui.js'
 import { unpublishDocs } from '../store.js'
 
 const props = defineProps({
   collection: { type: Object, required: true },
-  initialTab: { type: String, default: 'members' },
+  initialTab: { type: String, default: 'publish' },
 })
 const emit = defineEmits(['close'])
 const tab = ref(props.initialTab)
@@ -35,71 +32,8 @@ const role = computed(() => roleOf(col.value))
 const isOwner = computed(() => role.value === 'owner')
 const online = computed(() => cloudEnabled && !!state.user)
 
-// ---- Members -------------------------------------------------------------
-const members = ref([])
-const membersLoading = ref(false)
-const inviteEmail = ref('')
-const inviteRole = ref('editor')
 const busy = ref(false)
 const error = ref('')
-
-async function loadMembers() {
-  if (!online.value) return
-  error.value = ''
-  if (!col.value.syncedAt) {
-    members.value = [{ user_id: state.user.id, email: state.user.email, role: 'owner' }]
-    return
-  }
-  membersLoading.value = true
-  try {
-    members.value = await listMembers(col.value.id)
-  } catch (e) {
-    error.value = e.message
-  } finally {
-    membersLoading.value = false
-  }
-}
-
-async function invite() {
-  busy.value = true
-  error.value = ''
-  try {
-    await inviteMember(col.value, inviteEmail.value.trim(), inviteRole.value)
-    toast(`${inviteEmail.value} added as ${inviteRole.value}`, 'success')
-    inviteEmail.value = ''
-    await loadMembers()
-  } catch (e) {
-    error.value = e.message
-  } finally {
-    busy.value = false
-  }
-}
-
-async function changeRole(m, newRole) {
-  try {
-    await inviteMember(col.value, m.email, newRole)
-    m.role = newRole
-    toast(`${m.email} is now ${newRole}`, 'success')
-  } catch (e) {
-    error.value = e.message
-  }
-}
-
-async function remove(m) {
-  if (!confirm(`Remove ${m.email} from "${col.value.name}"?`)) return
-  try {
-    await removeMember(col.value, m)
-    members.value = members.value.filter((x) => x.user_id !== m.user_id)
-  } catch (e) {
-    error.value = e.message
-  }
-}
-
-async function leave() {
-  if (!confirm(`Leave "${col.value.name}"? It will be removed from your workspace.`)) return
-  await deleteCollection(col.value.id)
-  emit('close')
-}
 
 // ---- Publish -------------------------------------------------------------
 const published = ref(null) // { slug, published_at }
@@ -166,26 +100,8 @@ async function loadActivity() {
   }
 }
 
-const actionColor = (a) =>
-  a.startsWith('DELETE') || a === 'REMOVE_MEMBER' || a === 'UNPUBLISH_DOCS'
-    ? 'text-red-400 bg-red-500/10'
-    : a.startsWith('CREATE') || a === 'IMPORT_COLLECTION' || a === 'ADD_MOCK_SAMPLE' || a === 'ADD_MEMBER'
-      ? 'text-emerald-400 bg-emerald-500/10'
-      : a === 'PUBLISH_DOCS'
-        ? 'text-sky-400 bg-sky-500/10'
-        : 'text-amber-400 bg-amber-500/10'
-
-function ago(iso) {
-  const s = Math.round((Date.now() - new Date(iso)) / 1000)
-  if (s < 60) return 'just now'
-  if (s < 3600) return `${Math.floor(s / 60)}m ago`
-  if (s < 86400) return `${Math.floor(s / 3600)}h ago`
-  if (s < 7 * 86400) return `${Math.floor(s / 86400)}d ago`
-  return new Date(iso).toLocaleDateString()
-}
-
 // ---- load per tab ----------------------------------------------------------
-const loaders = { members: loadMembers, publish: loadPublished, activity: loadActivity }
+const loaders = { publish: loadPublished, activity: loadActivity }
 onMounted(() => loaders[tab.value]?.())
 watch(tab, (t) => {
   error.value = ''
@@ -193,7 +109,6 @@ watch(tab, (t) => {
 })
 
 const tabs = [
-  { id: 'members', label: 'Members', icon: Users },
   { id: 'publish', label: 'Publish Docs', icon: Globe },
   { id: 'activity', label: 'Activity Log', icon: History },
 ]
@@ -211,49 +126,16 @@ const tabs = [
     <div class="min-h-80 p-4 text-sm">
       <!-- Not signed in -->
       <div v-if="!online && tab !== 'publish'" class="rounded border border-zinc-800 bg-zinc-900/60 p-4 text-zinc-400">
-        <template v-if="!cloudEnabled">Collaboration needs Supabase configured (see README). This workspace is local only.</template>
-        <template v-else>Sign in to share this collection and see its activity.</template>
+        <template v-if="!cloudEnabled">The activity log needs Supabase configured (see README). This workspace is local only.</template>
+        <template v-else>Sign in to see this collection's activity.</template>
       </div>
-
-      <!-- Members -->
-      <template v-else-if="tab === 'members'">
-        <form v-if="isOwner" class="mb-4 flex flex-wrap gap-2" @submit.prevent="invite">
-          <input v-model="inviteEmail" type="email" required placeholder="teammate@company.com" class="min-w-56 flex-1 rounded border border-zinc-700 bg-zinc-900 px-3 py-1.5 outline-none focus:border-zinc-500" />
-          <select v-model="inviteRole" class="rounded border border-zinc-700 bg-zinc-900 px-2">
-            <option value="editor">Editor: can change requests</option>
-            <option value="viewer">Viewer: view &amp; run only</option>
-          </select>
-          <button :disabled="busy" class="inline-flex items-center gap-1.5 rounded bg-orange-500 px-3 py-1.5 font-medium text-white hover:bg-orange-600 disabled:opacity-50">
-            <Loader2 v-if="busy" :size="14" class="animate-spin" /><UserPlus v-else :size="14" /> Invite
-          </button>
-          <p class="w-full text-xs text-zinc-500">The person needs a Beacon account with this email (created by an administrator). The collection appears in their sidebar on their next sync.</p>
-        </form>
-        <p v-else class="mb-4 text-xs text-zinc-500">You are a <b class="text-zinc-300">{{ role }}</b> of this collection. Only the owner can manage members.</p>
-
-        <div v-if="membersLoading" class="py-6 text-center text-zinc-500"><Loader2 class="inline animate-spin" :size="16" /></div>
-        <ul v-else class="divide-y divide-zinc-800 rounded border border-zinc-800">
-          <li v-for="m in members" :key="m.user_id" class="flex items-center gap-3 px-3 py-2">
-            <span class="flex h-7 w-7 items-center justify-center rounded-full bg-zinc-800 text-xs uppercase">{{ m.email?.[0] }}</span>
-            <span class="min-w-0 flex-1 truncate">{{ m.email }}<span v-if="m.user_id === state.user?.id" class="text-zinc-500"> (you)</span></span>
-            <span v-if="m.role === 'owner' || !isOwner" class="text-xs text-zinc-400 capitalize">{{ m.role }}</span>
-            <template v-else>
-              <select :value="m.role" class="rounded border border-zinc-700 bg-zinc-900 px-2 py-0.5 text-xs" @change="changeRole(m, $event.target.value)">
-                <option value="editor">Editor</option>
-                <option value="viewer">Viewer</option>
-              </select>
-              <button class="rounded p-1 text-zinc-500 hover:bg-zinc-800 hover:text-red-400" title="Remove" @click="remove(m)"><Trash2 :size="14" /></button>
-            </template>
-          </li>
-        </ul>
-        <button v-if="!isOwner" class="mt-4 rounded border border-red-900 px-3 py-1.5 text-xs text-red-400 hover:bg-red-950/40" @click="leave">Leave collection</button>
-      </template>
 
       <!-- Publish -->
       <template v-else-if="tab === 'publish'">
         <label class="mb-1 block text-xs text-zinc-500">Description (shown at the top of the docs page)</label>
         <textarea
           v-model="col.description"
-          :disabled="role === 'viewer'"
+          :disabled="!canEdit(col)"
           rows="3"
           class="mb-4 w-full rounded border border-zinc-700 bg-zinc-900 p-2 outline-none focus:border-zinc-500"
           placeholder="What this API does, base URLs, how to authenticate…"
@@ -284,12 +166,12 @@ const tabs = [
           </div>
           <p v-if="published" class="mt-3 text-xs text-emerald-400">Published {{ ago(published.published_at) }}. Edits are not live: press "Update published docs" to publish changes.</p>
         </template>
-        <p v-else class="text-zinc-400">Only the owner can publish this collection.</p>
+        <p v-else class="text-zinc-400">Only the person who created this collection can publish its docs.</p>
 
         <a :href="docsPreviewUrl(col.id)" target="_blank" class="mt-4 inline-flex items-center gap-1 text-xs text-zinc-400 hover:text-zinc-100"><Eye :size="13" /> Preview docs (local, not shared)</a>
         <p class="mt-4 text-xs text-zinc-600">
           Published docs are a snapshot. Literal tokens, passwords and API keys in auth and sensitive headers are replaced with placeholders.
-          <span v-pre>{{variables}}</span> are shown by name; environment values are never published. Mock URLs of published samples work without a service role key.
+          <span v-pre>{{variables}}</span> are shown by name; environment values are never published.
         </p>
       </template>
 
