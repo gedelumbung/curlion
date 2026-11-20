@@ -1,4 +1,4 @@
--- Echo schema (PRD §6): relational + JSONB hybrid.
+-- Beacon schema (PRD §6): relational + JSONB hybrid.
 -- Run in Supabase SQL Editor, or with `supabase db push`.
 
 -- 1. Collections: the whole folder/request tree lives in tree_data (JSONB).

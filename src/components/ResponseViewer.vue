@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 import { AlertTriangle, Check, Copy, FileDown, Save, WrapText } from 'lucide-vue-next'
 import CodeEditor from './CodeEditor.vue'
 import JsonTree from './JsonTree.vue'
-import { activeRequest, activeResponse, state, toast } from '../store.js'
+import { activeError, activeLoading, activeRequest, activeResponse, state, toast } from '../store.js'
 import { kv, newSample } from '../lib/model.js'
 import { copyText, formatSize, statusColor } from '../lib/ui.js'
 
@@ -71,10 +71,10 @@ function saveAsSample() {
     </div>
 
     <div class="min-h-0 flex-1 overflow-auto">
-      <div v-if="state.loading" class="flex h-full items-center justify-center text-sm text-zinc-500">Sending request…</div>
-      <div v-else-if="state.error" class="m-4 rounded border border-red-900 bg-red-950/40 p-3 text-sm text-red-300">
+      <div v-if="activeLoading" class="flex h-full items-center justify-center text-sm text-zinc-500">Sending request…</div>
+      <div v-else-if="activeError" class="m-4 rounded border border-red-900 bg-red-950/40 p-3 text-sm text-red-300">
         <p class="font-medium">Could not get a response</p>
-        <p class="mt-1 text-red-300/80">{{ state.error }}</p>
+        <p class="mt-1 text-red-300/80">{{ activeError }}</p>
       </div>
       <div v-else-if="!res" class="flex h-full items-center justify-center p-6 text-center text-sm text-zinc-600">
         Click Send to get a response. Tip: paste a cURL command into the URL bar.

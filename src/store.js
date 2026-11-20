@@ -1,5 +1,5 @@
 // Global app store: state, persistence (IndexedDB) and cloud sync (Supabase).
-import { computed, reactive, toRaw } from 'vue'
+import { computed, reactive, toRaw, watch } from 'vue'
 import { db, getMeta, migrateLegacyDb, setMeta } from './db/index.js'
 import { clone, findNode, kv, newCollection, newEnvironment, newFolder, newRequest, reId, uid } from './lib/model.js'
 import { buildScope, getByPath } from './lib/variables.js'
@@ -21,11 +21,12 @@ export const state = reactive({
   activeEnvId: null,
   mode: 'direct', // direct | proxy
   active: null, // { collectionId, requestId }
+  tabs: [], // open request tabs: { collectionId, requestId, preview }
   expanded: {}, // folder/collection id -> bool
   search: '',
   responses: {}, // requestId -> response (kept per request for this session)
-  loading: false,
-  error: null,
+  pending: {}, // requestId -> true while that request is in flight
+  errors: {}, // requestId -> error message of its last send
   history: [],
   user: null,
   roles: {}, // collectionId -> 'editor' | 'viewer' for collections shared with me
@@ -49,6 +50,17 @@ export const activeRequest = computed(() => {
   return hit?.node.type === 'request' ? hit.node : null
 })
 export const activeResponse = computed(() => (activeRequest.value ? state.responses[activeRequest.value.id] || null : null))
+export const activeLoading = computed(() => !!(activeRequest.value && state.pending[activeRequest.value.id]))
+export const activeError = computed(() => (activeRequest.value ? state.errors[activeRequest.value.id] || null : null))
+
+/** Open tabs resolved to their collection + request (tabs whose request no longer exists are skipped). */
+export const openTabs = computed(() =>
+  state.tabs.flatMap((tab) => {
+    const col = state.collections.find((c) => c.id === tab.collectionId)
+    const hit = col && findNode(col.items, tab.requestId)
+    return hit?.node.type === 'request' ? [{ tab, col, req: hit.node }] : []
+  }),
+)
 
 /** 'owner' | 'editor' | 'viewer' (local-only collections count as owner). */
 export function roleOf(col) {
@@ -145,6 +157,7 @@ export async function init() {
     getMeta('active'),
     getMeta('expanded', {}),
   ])
+  const savedTabs = await getMeta('tabs', [])
   cols.sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''))
   state.collections = cols
   state.environments = envs
@@ -164,9 +177,13 @@ export async function init() {
     await setMeta('seeded', true)
   }
 
-  if (active && findNode(state.collections.find((c) => c.id === active.collectionId)?.items || [], active.requestId)) {
-    state.active = active
+  const exists = (t) => t && findNode(state.collections.find((c) => c.id === t.collectionId)?.items || [], t.requestId)
+  if (!state.tabs.length) state.tabs = (savedTabs || []).filter(exists)
+  if (!state.active && exists(active)) state.active = active
+  if (state.active && !state.tabs.some((t) => t.requestId === state.active.requestId)) {
+    state.tabs.push({ ...state.active, preview: false })
   }
+  saveTabs()
 
   state.ready = true
 
@@ -175,16 +192,6 @@ export async function init() {
     setUser(data.session?.user || null)
     supabase.auth.onAuthStateChange((_event, session) => setUser(session?.user || null))
   }
-}
-
-/** Sidebar action: add the "Getting Started" example collection again. */
-export async function addSampleCollection() {
-  await seedGettingStarted()
-  const col = state.collections.at(-1)
-  scheduleSync('col', col.id)
-  const dev = state.environments.find((e) => e.id === state.activeEnvId)
-  if (dev) scheduleSync('env', dev.id)
-  toast('Added the "Getting Started" sample collection', 'success')
 }
 
 async function seedGettingStarted() {
@@ -256,10 +263,74 @@ export function toggleExpanded(id, value) {
   state.expanded[id] = value ?? !state.expanded[id]
   setMeta('expanded', { ...state.expanded })
 }
-export function openRequest(collectionId, requestId) {
+// ---- Tabs ---------------------------------------------------------------
+// Like Postman: a single click in the sidebar opens a *preview* tab (italic) that the
+// next single click replaces. Editing, sending or double-clicking the tab keeps it.
+
+function saveTabs() {
+  setMeta('tabs', state.tabs.map((t) => ({ ...t })))
+  setMeta('active', state.active ? { ...state.active } : null)
+}
+
+/**
+ * Open a request in a tab and make it active.
+ * opts.preview: open as a preview tab (replaces the current preview tab).
+ */
+export function openRequest(collectionId, requestId, { preview = false } = {}) {
+  const existing = state.tabs.find((t) => t.requestId === requestId)
+  if (existing) {
+    existing.collectionId = collectionId
+    if (!preview) existing.preview = false
+  } else {
+    const tab = { collectionId, requestId, preview }
+    const prevIdx = preview ? state.tabs.findIndex((t) => t.preview) : -1
+    if (prevIdx !== -1) state.tabs.splice(prevIdx, 1, tab)
+    else {
+      const activeIdx = state.tabs.findIndex((t) => t.requestId === state.active?.requestId)
+      state.tabs.splice(activeIdx === -1 ? state.tabs.length : activeIdx + 1, 0, tab)
+    }
+  }
   state.active = { collectionId, requestId }
-  state.error = null
-  setMeta('active', { collectionId, requestId })
+  saveTabs()
+}
+
+/** Turn a preview tab into a regular one (on edit, send or double-click). */
+export function keepTab(requestId) {
+  const tab = state.tabs.find((t) => t.requestId === requestId)
+  if (tab?.preview) {
+    tab.preview = false
+    saveTabs()
+  }
+}
+
+/** Close the tabs matching `pred`; if the active one closes, activate its neighbour. */
+export function closeTabs(pred) {
+  const activeIdx = state.tabs.findIndex((t) => t.requestId === state.active?.requestId)
+  const activeClosed = activeIdx !== -1 && pred(state.tabs[activeIdx], activeIdx)
+  const kept = state.tabs.filter((t, i) => !pred(t, i))
+  for (const t of state.tabs) if (!kept.includes(t) && state.pending[t.requestId]) cancel(t.requestId)
+  if (activeClosed || !state.active) {
+    // nearest surviving tab to the right of the old position, else to the left
+    const after = state.tabs.slice(activeIdx + 1).find((t) => kept.includes(t))
+    const before = state.tabs.slice(0, Math.max(activeIdx, 0)).reverse().find((t) => kept.includes(t))
+    const next = after || before
+    state.active = next ? { collectionId: next.collectionId, requestId: next.requestId } : null
+  }
+  state.tabs = kept
+  saveTabs()
+}
+export const closeTab = (requestId) => closeTabs((t) => t.requestId === requestId)
+
+// Requests can also disappear through sync (deleted on another device): drop their tabs.
+watch(openTabs, (list) => {
+  if (state.ready && list.length !== state.tabs.length) closeTabs((t) => !list.some((x) => x.tab === t))
+})
+
+export function moveTab(from, to) {
+  if (from === to || from < 0 || to < 0) return
+  const [tab] = state.tabs.splice(from, 1)
+  state.tabs.splice(to, 0, tab)
+  saveTabs()
 }
 
 // ---- Collection CRUD ----------------------------------------------------
@@ -283,7 +354,7 @@ export async function deleteCollection(id) {
   const i = state.collections.findIndex((c) => c.id === id)
   if (i === -1) return
   const [col] = state.collections.splice(i, 1)
-  if (state.active?.collectionId === id) state.active = null
+  closeTabs((t) => t.collectionId === id)
   await db.collections.delete(id)
   if (state.roles[id]) {
     // shared with me: "delete" means leave the collection
@@ -309,6 +380,13 @@ export function addFolder(col, parentId, name = 'New Folder') {
   state.expanded[f.id] = true
   touchCollection(col)
   return f
+}
+
+/** "New request" button: add to the active collection (if editable), else the first editable one, else a new one. */
+export function addNewRequest() {
+  const active = state.collections.find((c) => c.id === state.active?.collectionId)
+  const col = (active && canEdit(active) ? active : state.collections.find(canEdit)) || createCollection('My Collection')
+  return addRequest(col, null)
 }
 
 export function addRequest(col, parentId, req = newRequest()) {
@@ -344,9 +422,8 @@ export function deleteNode(col, id) {
   if (!hit) return
   const list = hit.parent ? hit.parent.items : col.items
   list.splice(list.indexOf(hit.node), 1)
-  if (state.active?.requestId === id || (hit.node.type === 'folder' && !findNode(col.items, state.active?.requestId))) {
-    state.active = null
-  }
+  // close the tab of the deleted request, or of every request inside a deleted folder
+  closeTabs((t) => t.collectionId === col.id && !findNode(col.items, t.requestId))
   touchCollection(col)
 }
 
@@ -400,19 +477,23 @@ export function setVariable(key, value) {
 
 // ---- Sending ------------------------------------------------------------
 
-let controller = null
+// One in-flight request per tab; tabs can send concurrently.
+const controllers = new Map() // requestId -> AbortController
 
 export async function send({ download = false } = {}) {
   const req = activeRequest.value
   if (!req) return
+  const id = req.id
+  keepTab(id)
   if (!req.url.trim()) {
-    state.error = 'Enter a request URL first.'
+    state.errors[id] = 'Enter a request URL first.'
     return
   }
-  controller?.abort()
-  controller = new AbortController()
-  state.loading = true
-  state.error = null
+  controllers.get(id)?.abort()
+  const controller = new AbortController()
+  controllers.set(id, controller)
+  state.pending[id] = true
+  delete state.errors[id]
   const resolved = resolveRequest(req, scope.value)
   try {
     if (state.mode === 'proxy' && /^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])/i.test(resolved.url)) {
@@ -421,22 +502,26 @@ export async function send({ download = false } = {}) {
     const res = await sendRequest(resolved, { mode: state.mode, download, signal: controller.signal })
     res.at = Date.now()
     res.extracted = runExtract(req, res)
-    state.responses[req.id] = res
+    state.responses[id] = res
     addHistory(req, resolved, res)
   } catch (err) {
     if (err.name !== 'AbortError') {
-      state.error = err.message
-      delete state.responses[req.id]
+      state.errors[id] = err.message
+      delete state.responses[id]
     }
   } finally {
-    state.loading = false
-    controller = null
+    // a newer send of the same request may have replaced this one
+    if (controllers.get(id) === controller) {
+      controllers.delete(id)
+      delete state.pending[id]
+    }
   }
 }
 
-export function cancel() {
-  controller?.abort()
-  state.loading = false
+export function cancel(id = activeRequest.value?.id) {
+  controllers.get(id)?.abort()
+  controllers.delete(id)
+  delete state.pending[id]
 }
 
 /** Post-response extraction: JSON path -> environment variable. */

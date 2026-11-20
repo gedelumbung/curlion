@@ -1,9 +1,9 @@
 <script setup>
 import { computed, nextTick, ref } from 'vue'
-import { ChevronRight, Clock, Copy, Download, FilePlus, FolderPlus, Globe, History, Layers, LogOut, MoreHorizontal, Pencil, Plus, Search, Sparkles, Trash2, Upload, Users } from 'lucide-vue-next'
+import { ChevronRight, Clock, Copy, Download, FilePlus, FolderPlus, Globe, History, Layers, LogOut, MoreHorizontal, Pencil, Plus, Search, Trash2, Upload, Users } from 'lucide-vue-next'
 import TreeNode from './TreeNode.vue'
 import {
-  addSampleCollection,
+  addNewRequest,
   addFolder,
   addRequest,
   clearHistory,
@@ -28,7 +28,6 @@ const renamingId = ref(null)
 const menu = ref(null) // { x, y, items }
 
 const q = computed(() => state.search.trim().toLowerCase())
-const hasSample = computed(() => q.value || state.collections.some((c) => c.name === 'Getting Started'))
 function colVisible(col) {
   if (!q.value) return true
   if (col.name.toLowerCase().includes(q.value)) return true
@@ -116,7 +115,7 @@ function runItem(item) {
 
 function openHistory(h) {
   const col = state.collections.find((c) => c.id === h.collectionId)
-  if (col && findNode(col.items, h.requestId)) openRequest(col.id, h.requestId)
+  if (col && findNode(col.items, h.requestId)) openRequest(col.id, h.requestId, { preview: true })
 }
 function askClearHistory() {
   if (confirm('Clear history?')) clearHistory()
@@ -141,6 +140,7 @@ const fmtTime = (ts) => new Date(ts).toLocaleString(undefined, { hour: '2-digit'
           <Search :size="13" class="text-zinc-500" />
           <input v-model="state.search" placeholder="Search name or URL" class="w-full bg-transparent py-1 text-[13px] outline-none placeholder:text-zinc-600" />
         </div>
+        <button class="rounded p-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100" title="New request" @click="addNewRequest"><FilePlus :size="15" /></button>
         <button class="rounded p-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100" title="New collection" @click="newCollection"><Plus :size="16" /></button>
         <button class="rounded p-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100" title="Import" @click="emit('import')"><Upload :size="15" /></button>
       </div>
@@ -189,13 +189,6 @@ const fmtTime = (ts) => new Date(ts).toLocaleString(undefined, { hour: '2-digit'
           No collections yet.
           <button class="mt-2 block w-full rounded bg-zinc-800 py-1.5 text-zinc-200 hover:bg-zinc-700" @click="newCollection">Create collection</button>
         </div>
-        <button
-          v-if="!hasSample"
-          class="mx-2 mt-3 flex w-[calc(100%-1rem)] items-center justify-center gap-1.5 rounded border border-dashed border-zinc-700 py-1.5 text-xs text-zinc-500 hover:border-zinc-500 hover:text-zinc-300"
-          @click="addSampleCollection"
-        >
-          <Sparkles :size="13" /> Add "Getting Started" sample
-        </button>
       </div>
     </template>
 

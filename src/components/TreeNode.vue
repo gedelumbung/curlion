@@ -32,7 +32,11 @@ const active = computed(() => state.active?.requestId === props.node.id)
 
 function click() {
   if (isFolder.value) toggleExpanded(props.node.id)
-  else openRequest(props.collection.id, props.node.id)
+  else openRequest(props.collection.id, props.node.id, { preview: true })
+}
+// double-click a request: open it as a regular (non-preview) tab
+function dblclick() {
+  if (!isFolder.value) openRequest(props.collection.id, props.node.id)
 }
 
 // inline rename
@@ -54,12 +58,12 @@ function commit() {
 // drag & drop (within one collection)
 const dropHint = ref(false)
 function onDragStart(e) {
-  e.dataTransfer.setData('application/x-echo', JSON.stringify({ collectionId: props.collection.id, id: props.node.id }))
+  e.dataTransfer.setData('application/x-beacon', JSON.stringify({ collectionId: props.collection.id, id: props.node.id }))
   e.dataTransfer.effectAllowed = 'move'
 }
 function onDrop(e) {
   dropHint.value = false
-  const raw = e.dataTransfer.getData('application/x-echo')
+  const raw = e.dataTransfer.getData('application/x-beacon')
   if (!raw) return
   const { collectionId, id } = JSON.parse(raw)
   if (collectionId !== props.collection.id || id === props.node.id) return
@@ -90,6 +94,7 @@ function findParentId(items, id, parent = null) {
       :style="{ paddingLeft: depth * 12 + 'px' }"
       :draggable="canEdit(collection)"
       @click="click"
+      @dblclick="dblclick"
       @contextmenu.prevent="canEdit(collection) && emit('menu', $event, node)"
       @dragstart.stop="onDragStart"
       @dragover.prevent="dropHint = true"

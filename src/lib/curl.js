@@ -1,4 +1,4 @@
-// Parse a `curl` command into a Echo request.
+// Parse a `curl` command into a Beacon request.
 import { kv, newRequest } from './model.js'
 import { parseQuery } from './url.js'
 

@@ -5,7 +5,7 @@ import VarInput from './VarInput.vue'
 import KeyValueEditor from './KeyValueEditor.vue'
 import CodeEditor from './CodeEditor.vue'
 import SamplesPanel from './SamplesPanel.vue'
-import { activeCollection, activeRequest, activeResponse, cancel, canEdit, send, state, toast, touchCollection } from '../store.js'
+import { activeCollection, activeLoading, activeRequest, activeResponse, cancel, canEdit, keepTab, send, state, toast, touchCollection } from '../store.js'
 import { METHODS, uid } from '../lib/model.js'
 import { paramsFromUrl, urlFromParams } from '../lib/url.js'
 import { looksLikeCurl, parseCurl } from '../lib/curl.js'
@@ -21,7 +21,10 @@ const sendMenu = ref(false)
 watch(
   req,
   (n, o) => {
-    if (n && n === o) touchCollection(state.active.collectionId)
+    if (n && n === o) {
+      touchCollection(state.active.collectionId)
+      keepTab(n.id) // editing a preview tab keeps it open
+    }
   },
   { deep: true },
 )
@@ -150,14 +153,14 @@ defineExpose({ applyCurl })
       </div>
       <div class="relative flex">
         <button
-          v-if="!state.loading"
+          v-if="!activeLoading"
           class="inline-flex items-center gap-2 rounded-l-md bg-orange-500 px-4 text-sm font-semibold text-white hover:bg-orange-600"
           title="Send (Ctrl+Enter)"
           @click="doSend()"
         >
           <Send :size="15" /> Send
         </button>
-        <button v-else class="inline-flex items-center gap-2 rounded-l-md bg-zinc-700 px-4 text-sm font-semibold text-zinc-100 hover:bg-zinc-600" @click="cancel">
+        <button v-else class="inline-flex items-center gap-2 rounded-l-md bg-zinc-700 px-4 text-sm font-semibold text-zinc-100 hover:bg-zinc-600" @click="cancel()">
           <Loader2 :size="15" class="animate-spin" /> Cancel
         </button>
         <button class="rounded-r-md border-l border-orange-700 bg-orange-500 px-1.5 text-white hover:bg-orange-600" @click="sendMenu = !sendMenu">

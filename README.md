@@ -1,4 +1,4 @@
-# Echo
+# Beacon
 
 A web-based API client (a lightweight Postman alternative) with **local-first storage** (IndexedDB), optional sync to **Supabase**, and **Netlify Edge Functions** for a CORS proxy and mock endpoints. Target cost: $0 (free tiers).
 
@@ -72,9 +72,10 @@ All available from the collection menu in the sidebar (right-click or `⋯`): **
 
 ## Interface
 
+- **Multiple tabs** (like Postman): a single click in the sidebar opens a *preview* tab (italic) that the next click replaces; editing, sending or double-clicking keeps it open. Close with × or middle-click, drag to reorder, right-click for Close others / to the right / all. Each tab keeps its own response and can send concurrently. Open tabs are remembered.
 - **Light / dark theme**: toggle switch in the header. The choice is remembered; until you pick one, it follows the system setting.
 - **Resizable panes**: drag the sidebar edge or the divider between request and response. Double-click a divider to reset it. Sizes are remembered per browser.
-- **"Getting Started" sample**: seeded on first run, and can be added again from the sidebar when it is missing.
+- **"Getting Started" sample**: seeded on first run.
 
 ### How it works and design decisions
 
@@ -88,7 +89,7 @@ All available from the collection menu in the sidebar (right-click or `⋯`): **
 ```
 src/
   store.js              state, IndexedDB persistence, Supabase sync, send + extract
-  db/index.js           Dexie schema (+ one-time migration from the old "postlite" database)
+  db/index.js           Dexie schema (+ one-time migration from the old "echo"/"postlite" databases)
   lib/
     model.js            data factories (collection/folder/request/sample/env)
     variables.js        {{var}} interpolation, dynamic vars, JSON path
@@ -104,7 +105,7 @@ src/
     theme.js            light/dark theme
   components/           UI (Sidebar, RequestEditor, ResponseViewer, modals)
 netlify/edge-functions/
-  proxy.js              CORS proxy (POST /api/proxy, target in X-Echo-* headers)
+  proxy.js              CORS proxy (POST /api/proxy, target in X-Beacon-* headers)
   mock.js               public mock endpoint
 supabase/migrations/    SQL schema + RLS (001 base, 002 docs/collaboration)
 tests/                  unit tests (node:test)

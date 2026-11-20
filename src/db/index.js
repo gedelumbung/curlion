@@ -1,7 +1,7 @@
 // Local-first storage (IndexedDB via Dexie). Everything works without login.
 import Dexie from 'dexie'
 
-export const db = new Dexie('echo')
+export const db = new Dexie('beacon')
 
 const SCHEMA = {
   collections: 'id, updatedAt',
@@ -12,7 +12,10 @@ const SCHEMA = {
 }
 db.version(1).stores(SCHEMA)
 
-const LEGACY_NAME = 'postlite' // database name before the rename to Echo
+// Database names used by earlier versions of the app, newest first
+// (PostLite -> Echo -> Beacon). The newest one that exists already holds the data
+// migrated from the ones before it, so only that one is copied.
+const LEGACY_NAMES = ['echo', 'postlite']
 
 /**
  * Copy data from the pre-rename database, once. Rows already in this database win,
@@ -20,11 +23,18 @@ const LEGACY_NAME = 'postlite' // database name before the rename to Echo
  */
 export async function migrateLegacyDb() {
   if (await getMeta('legacyMigrated')) return false
-  if (!(await Dexie.exists(LEGACY_NAME))) {
+  let legacyName = null
+  for (const name of LEGACY_NAMES) {
+    if (await Dexie.exists(name)) {
+      legacyName = name
+      break
+    }
+  }
+  if (!legacyName) {
     await setMeta('legacyMigrated', true)
     return false
   }
-  const legacy = new Dexie(LEGACY_NAME)
+  const legacy = new Dexie(legacyName)
   legacy.version(1).stores(SCHEMA)
   try {
     const old = Object.fromEntries(await Promise.all(db.tables.map(async (t) => [t.name, await legacy.table(t.name).toArray()])))
