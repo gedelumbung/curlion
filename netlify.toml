@@ -1,0 +1,19 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+# CORS proxy: browser -> /api/proxy -> target API
+[[edge_functions]]
+  path = "/api/proxy"
+  function = "proxy"
+
+# Public mock endpoint: /mock/<collection_id>/<sample_id>
+[[edge_functions]]
+  path = "/mock/*"
+  function = "mock"
+
+# SPA fallback
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
