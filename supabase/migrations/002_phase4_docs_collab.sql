@@ -56,7 +56,7 @@ begin
   end if;
   select id into v_user from auth.users where lower(email) = lower(trim(p_email));
   if v_user is null then
-    raise exception 'No Beacon account uses %. Ask them to sign up first.', p_email;
+    raise exception 'No Beacon account uses %. An administrator has to create the account first.', p_email;
   end if;
   if v_user = auth.uid() then
     raise exception 'You already own this collection';

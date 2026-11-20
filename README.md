@@ -30,9 +30,12 @@ netlify dev        # runs Vite + edge functions at /api/proxy and /mock/*
    - [`002_phase4_docs_collab.sql`](supabase/migrations/002_phase4_docs_collab.sql): published docs, collaboration RPCs
    - [`003_grants.sql`](supabase/migrations/003_grants.sql): table privileges for signed-in users (newer Supabase projects do not grant these automatically, which shows up as "permission denied for table collections")
    - [`004_require_login.sql`](supabase/migrations/004_require_login.sql): removes all anonymous access; docs are readable by signed-in users only
+   - [`005_admin_created_accounts.sql`](supabase/migrations/005_admin_created_accounts.sql): invite error message for admin-created accounts
 2. Copy `.env.example` to `.env` and fill in `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.
 3. In Supabase → Authentication → URL Configuration, set the Site URL to your site and add `https://<your-site>/**` (and `http://localhost:5173/**` for development) to Redirect URLs, so sign-in returns to the page it started from (e.g. a docs link).
-4. (Optional) Enable the GitHub/Google OAuth providers in Supabase → Authentication → Sign In / Providers.
+4. Lock down sign-in (accounts are created by an administrator; there is no sign-up or OAuth):
+   - Supabase → Authentication → Sign In / Providers: turn off **Allow new users to sign up**, keep **Email** enabled, and leave every OAuth provider disabled.
+   - Create each user in Supabase → Authentication → Users → **Add user → Create new user**, with **Auto Confirm User** checked.
 5. Deploy to Netlify (build `npm run build`, publish `dist`; already configured in [`netlify.toml`](netlify.toml)). Set these env vars in Netlify:
    - `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`: frontend build (not secret: they end up in the browser bundle)
    - `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`: mock edge function (mark the service role key as secret)
@@ -57,7 +60,7 @@ netlify dev        # runs Vite + edge functions at /api/proxy and /mock/*
 | Paste cURL into the URL bar / Import → Raw cURL | ✅ |
 | Code snippets: cURL, fetch, Axios, PHP cURL, Guzzle, Go net/http, Python requests | ✅ |
 | Sample / example responses + mock URL `/mock/<collection_id>/<sample_id>` | ✅ |
-| Supabase Auth (email/password, GitHub, Google) + local↔cloud sync (3-second debounce, `Ctrl/⌘+S`) | ✅ |
+| Supabase Auth (email/password only, accounts created by an admin) + local↔cloud sync (3-second debounce, `Ctrl/⌘+S`) | ✅ |
 | Secret variables (`is_secret`): masked in the UI, left out of snippets when the mask option is on | ✅ |
 
 ## Phase 4 features (PRD §5)
@@ -112,7 +115,7 @@ src/
 netlify/edge-functions/
   proxy.js              CORS proxy (POST /api/proxy, target in X-Beacon-* headers)
   mock.js               mock endpoint (reads with the service role key)
-supabase/migrations/    SQL schema + RLS (001 base, 002 docs/collaboration, 003 grants)
+supabase/migrations/    SQL schema + RLS (001 base, 002 docs/collaboration, 003 grants, 004 sign-in only, 005 invite message)
 tests/                  unit tests (node:test)
 ```
 

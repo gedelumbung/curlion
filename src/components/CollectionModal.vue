@@ -226,7 +226,7 @@ const tabs = [
           <button :disabled="busy" class="inline-flex items-center gap-1.5 rounded bg-orange-500 px-3 py-1.5 font-medium text-white hover:bg-orange-600 disabled:opacity-50">
             <Loader2 v-if="busy" :size="14" class="animate-spin" /><UserPlus v-else :size="14" /> Invite
           </button>
-          <p class="w-full text-xs text-zinc-500">The person needs a Beacon account with this email. The collection appears in their sidebar on their next sync.</p>
+          <p class="w-full text-xs text-zinc-500">The person needs a Beacon account with this email (created by an administrator). The collection appears in their sidebar on their next sync.</p>
         </form>
         <p v-else class="mb-4 text-xs text-zinc-500">You are a <b class="text-zinc-300">{{ role }}</b> of this collection. Only the owner can manage members.</p>
 
