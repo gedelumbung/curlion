@@ -6,6 +6,7 @@ import { vTopLayer } from './lib/topLayer.js'
 import Sidebar from './components/Sidebar.vue'
 import RequestEditor from './components/RequestEditor.vue'
 import TabBar from './components/TabBar.vue'
+import BeaconLogo from './components/BeaconLogo.vue'
 import ResponseViewer from './components/ResponseViewer.vue'
 import EnvironmentModal from './components/EnvironmentModal.vue'
 import ImportModal from './components/ImportModal.vue'
@@ -128,7 +129,7 @@ const syncLabel = {
     <!-- Top bar -->
     <header :inert="!!modal" class="flex h-12 shrink-0 items-center gap-3 border-b border-zinc-800 px-3">
       <button class="flex items-center gap-2 font-semibold" title="Toggle sidebar" @click="sidebarOpen = !sidebarOpen">
-        <img src="/favicon.svg" class="h-6 w-6" alt="" />
+        <BeaconLogo class="h-6 w-6 text-zinc-100" />
         <span class="hidden sm:inline">Beacon</span>
       </button>
 
@@ -233,7 +234,7 @@ const syncLabel = {
           <ResponseViewer :key="activeRequest.id" class="min-h-0 flex-1" />
         </div>
         <div v-else class="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center text-zinc-500">
-          <img src="/favicon.svg" class="h-12 w-12 opacity-60" alt="" />
+          <BeaconLogo class="h-12 w-12 text-zinc-100 opacity-60" />
           <p>Select a request from the sidebar, or</p>
           <div class="flex gap-2">
             <button class="rounded bg-orange-500 px-4 py-1.5 text-sm font-medium text-white hover:bg-orange-600" @click="addNewRequest">New request</button>
