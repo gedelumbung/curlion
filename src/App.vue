@@ -10,17 +10,27 @@ import ResponseViewer from './components/ResponseViewer.vue'
 import EnvironmentModal from './components/EnvironmentModal.vue'
 import ImportModal from './components/ImportModal.vue'
 import CodeModal from './components/CodeModal.vue'
-import AuthModal from './components/AuthModal.vue'
+import LoginScreen from './components/LoginScreen.vue'
 import CollectionModal from './components/CollectionModal.vue'
 import { activeRequest, addNewRequest, cloudEnabled, init, openTabs, saveNow, send, setActiveEnv, setMode, signOut, state } from './store.js'
 
-const modal = ref(null) // env | import | code | auth | collection
+const modal = ref(null) // env | import | code | collection
 const collectionCtx = ref(null) // { col, tab }
 function openCollection(ctx) {
   collectionCtx.value = ctx
   modal.value = 'collection'
 }
 const sidebarOpen = ref(true)
+
+const signingOut = ref(false)
+async function doSignOut() {
+  signingOut.value = true
+  try {
+    await signOut()
+  } finally {
+    signingOut.value = false
+  }
+}
 
 // ---- Resizable panes (sidebar width, request/response split), remembered per browser
 const SIDEBAR_DEFAULT = 288
@@ -101,6 +111,9 @@ const syncLabel = {
     <Loader2 class="animate-spin" />
   </div>
 
+  <!-- With Supabase configured, everything is behind sign-in -->
+  <LoginScreen v-else-if="cloudEnabled && !state.user" />
+
   <div v-else class="flex h-screen flex-col bg-zinc-950 text-zinc-200">
     <!-- Top bar -->
     <header :inert="!!modal" class="flex h-12 shrink-0 items-center gap-3 border-b border-zinc-800 px-3">
@@ -147,17 +160,17 @@ const syncLabel = {
 
         <!-- Account / sync -->
         <template v-if="cloudEnabled">
-          <button v-if="!state.user" class="inline-flex items-center gap-1.5 rounded-md bg-zinc-800 px-3 py-1.5 text-xs hover:bg-zinc-700" @click="modal = 'auth'">
-            <Cloud :size="14" /> Sign in
-          </button>
-          <div v-else class="flex items-center gap-2 text-xs">
+          <div class="flex items-center gap-2 text-xs">
             <span class="inline-flex items-center gap-1" :class="state.sync.status === 'error' ? 'text-red-400' : 'text-zinc-400'" :title="state.sync.message || state.user.email">
               <Loader2 v-if="state.sync.status === 'syncing'" :size="13" class="animate-spin" />
               <Cloud v-else :size="13" />
               {{ syncLabel[state.sync.status] }}
             </span>
             <span class="hidden max-w-40 truncate text-zinc-500 md:inline">{{ state.user.email }}</span>
-            <button class="rounded p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-100" title="Sign out" @click="signOut"><LogOut :size="14" /></button>
+            <button class="rounded p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-100 disabled:opacity-60" :title="signingOut ? 'Syncing, then signing out…' : 'Sign out'" :disabled="signingOut" @click="doSignOut">
+              <Loader2 v-if="signingOut" :size="14" class="animate-spin" />
+              <LogOut v-else :size="14" />
+            </button>
           </div>
         </template>
         <span v-else class="inline-flex items-center gap-1 text-xs text-zinc-500" title="Supabase is not configured. Data is stored in this browser only (IndexedDB).">
@@ -208,7 +221,6 @@ const syncLabel = {
     <EnvironmentModal v-if="modal === 'env'" @close="modal = null" />
     <ImportModal v-if="modal === 'import'" @close="modal = null" />
     <CodeModal v-if="modal === 'code'" @close="modal = null" />
-    <AuthModal v-if="modal === 'auth'" @close="modal = null" />
     <CollectionModal v-if="modal === 'collection'" :collection="collectionCtx.col" :initial-tab="collectionCtx.tab" @close="modal = null" />
 
     <!-- Toasts: top layer, re-shown for each new toast so they sit above any open modal -->

@@ -14,6 +14,7 @@ npm run build
 ```
 
 Without a `.env` file the app runs **local only**: all data is stored in the browser's IndexedDB.
+With Supabase configured, Beacon is **sign-in only**: the app, the docs pages and the mock data are not available to anonymous visitors.
 
 To try **Proxy mode** and the **mock endpoint** locally, use the Netlify CLI:
 
@@ -25,13 +26,16 @@ netlify dev        # runs Vite + edge functions at /api/proxy and /mock/*
 ## Cloud setup (optional)
 
 1. Create a project on [Supabase](https://supabase.com), then run these in order in the SQL Editor:
-   [`001_init.sql`](supabase/migrations/001_init.sql) (tables + RLS) and [`002_phase4_docs_collab.sql`](supabase/migrations/002_phase4_docs_collab.sql) (public docs, collaboration RPCs).
+   - [`001_init.sql`](supabase/migrations/001_init.sql): tables + RLS
+   - [`002_phase4_docs_collab.sql`](supabase/migrations/002_phase4_docs_collab.sql): published docs, collaboration RPCs
+   - [`003_grants.sql`](supabase/migrations/003_grants.sql): table privileges for signed-in users (newer Supabase projects do not grant these automatically, which shows up as "permission denied for table collections")
+   - [`004_require_login.sql`](supabase/migrations/004_require_login.sql): removes all anonymous access; docs are readable by signed-in users only
 2. Copy `.env.example` to `.env` and fill in `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.
-3. (Optional) Enable the GitHub/Google OAuth providers in Supabase → Authentication → Providers, and add your site URL to Redirect URLs.
-4. Deploy to Netlify (build `npm run build`, publish `dist`; already configured in [`netlify.toml`](netlify.toml)). Set these env vars in Netlify:
-   - `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` (for the frontend build)
-   - `SUPABASE_URL`, `SUPABASE_ANON_KEY` (for the mock edge function)
-   - `SUPABASE_SERVICE_ROLE_KEY` (optional). With this key the mock reads live data from any synced collection. Without it, the mock reads the published docs snapshot.
+3. In Supabase → Authentication → URL Configuration, set the Site URL to your site and add `https://<your-site>/**` (and `http://localhost:5173/**` for development) to Redirect URLs, so sign-in returns to the page it started from (e.g. a docs link).
+4. (Optional) Enable the GitHub/Google OAuth providers in Supabase → Authentication → Sign In / Providers.
+5. Deploy to Netlify (build `npm run build`, publish `dist`; already configured in [`netlify.toml`](netlify.toml)). Set these env vars in Netlify:
+   - `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`: frontend build (not secret: they end up in the browser bundle)
+   - `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`: mock edge function (mark the service role key as secret)
 
 ## Features (MVP, PRD §4)
 
@@ -52,7 +56,7 @@ netlify dev        # runs Vite + edge functions at /api/proxy and /mock/*
 | Post-Response Extract (JSON path → environment variable), token chaining | ✅ |
 | Paste cURL into the URL bar / Import → Raw cURL | ✅ |
 | Code snippets: cURL, fetch, Axios, PHP cURL, Guzzle, Go net/http, Python requests | ✅ |
-| Sample / example responses + public mock URL `/mock/<collection_id>/<sample_id>` | ✅ |
+| Sample / example responses + mock URL `/mock/<collection_id>/<sample_id>` | ✅ |
 | Supabase Auth (email/password, GitHub, Google) + local↔cloud sync (3-second debounce, `Ctrl/⌘+S`) | ✅ |
 | Secret variables (`is_secret`): masked in the UI, left out of snippets when the mask option is on | ✅ |
 
@@ -62,7 +66,7 @@ All available from the collection menu in the sidebar (right-click or `⋯`): **
 
 | Feature | Status |
 | --- | --- |
-| **Publish Docs**: read-only public page `/docs/<slug>` (per-folder nav, params, headers, body, auth, sample responses, cURL/JS/PHP/Go/Python snippets + Copy) | ✅ |
+| **Publish Docs**: read-only page `/docs/<slug>` for signed-in users (per-folder nav, params, headers, body, auth, sample responses, cURL/JS/PHP/Go/Python snippets + Copy) | ✅ |
 | Update published content, change slug, Unpublish | ✅ |
 | Local docs preview `/docs/preview/<collection_id>` (no login) | ✅ |
 | Per-request (**Docs** tab) and per-collection descriptions | ✅ |
@@ -79,7 +83,8 @@ All available from the collection menu in the sidebar (right-click or `⋯`): **
 
 ### How it works and design decisions
 
-- **Docs are a sanitized snapshot** stored in the `published_docs` table, not live collection data. Literal tokens, passwords and API keys (in auth, sensitive headers, or `api_key`/`token` query params) are replaced with placeholders. `{{variables}}` are shown by name. Environment values are never published. For this reason the PRD's `is_public` policy on `collections` was replaced: the `collections` table cannot be read anonymously at all.
+- **Docs are a sanitized snapshot** stored in the `published_docs` table, not live collection data. Literal tokens, passwords and API keys (in auth, sensitive headers, or `api_key`/`token` query params) are replaced with placeholders. `{{variables}}` are shown by name. Environment values are never published. Docs can be read by any signed-in user who has the link; the anon role has no access to any table (the PRD's `is_public` policy is not used).
+- **Sign-in only:** with Supabase configured the app shows a login screen first. Signing out uploads pending changes and then removes that account's data from the browser; if a different account signs in, local data from the previous one is cleared first. The mock endpoint reads with the service role key on the server, since anonymous database access is closed.
 - **The activity log is computed from a diff** between the last logged tree and the tree that was just synced. Consecutive changes by one person are merged, roughly one entry per minute per collection. The log is also flushed on `Ctrl/⌘+S`, when the tab is hidden, and on logout. Only changes that actually reached the cloud are recorded.
 - **Invite by email** uses the `invite_collection_member` RPC (security definer), because `auth.users` cannot be read from the client. The invited person must already have an account.
 - Editors save changes with `UPDATE` rather than upsert, because the insert RLS policy only allows the owner.
@@ -106,8 +111,8 @@ src/
   components/           UI (Sidebar, RequestEditor, ResponseViewer, modals)
 netlify/edge-functions/
   proxy.js              CORS proxy (POST /api/proxy, target in X-Beacon-* headers)
-  mock.js               public mock endpoint
-supabase/migrations/    SQL schema + RLS (001 base, 002 docs/collaboration)
+  mock.js               mock endpoint (reads with the service role key)
+supabase/migrations/    SQL schema + RLS (001 base, 002 docs/collaboration, 003 grants)
 tests/                  unit tests (node:test)
 ```
 

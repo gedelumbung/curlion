@@ -1,7 +1,9 @@
-<!-- Public, read-only API documentation page: /docs/<slug> (or /docs/preview/<collectionId>). -->
+<!-- Read-only API documentation page: /docs/<slug> (or /docs/preview/<collectionId>).
+     With Supabase configured, viewers must be signed in (any account). -->
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { Check, Copy, Loader2, Lock } from 'lucide-vue-next'
+import LoginScreen from './LoginScreen.vue'
 import { supabase } from '../lib/supabase.js'
 import { db } from '../db/index.js'
 import { buildDocsSnapshot } from '../lib/publish.js'
@@ -17,8 +19,31 @@ const props = defineProps({
 const loading = ref(true)
 const error = ref('')
 const doc = ref(null) // { name, description, items, publishedAt }
+const needsLogin = ref(false)
 
+let authSub = null
 onMounted(async () => {
+  if (supabase) {
+    const { data } = await supabase.auth.getSession()
+    authSub = supabase.auth.onAuthStateChange((_e, session) => {
+      if (session && needsLogin.value) {
+        needsLogin.value = false
+        load()
+      }
+    }).data.subscription
+    if (!data.session) {
+      needsLogin.value = true
+      loading.value = false
+      return
+    }
+  }
+  load()
+})
+onBeforeUnmount(() => authSub?.unsubscribe())
+
+async function load() {
+  loading.value = true
+  error.value = ''
   try {
     if (props.preview) {
       const col = await db.collections.get(props.id)
@@ -28,7 +53,7 @@ onMounted(async () => {
       if (!supabase) throw new Error('This Beacon instance is not connected to a database.')
       const { data, error: e } = await supabase.from('published_docs').select('name, description, data, published_at').eq('slug', props.id).maybeSingle()
       if (e) throw e
-      if (!data) throw new Error('These docs do not exist or are no longer public.')
+      if (!data) throw new Error('These docs do not exist or are no longer published.')
       doc.value = { name: data.name, description: data.description, items: data.data?.items || [], publishedAt: data.published_at }
     }
     document.title = `${doc.value.name} · API Docs`
@@ -39,7 +64,7 @@ onMounted(async () => {
   }
   // honour #anchor after content renders
   if (location.hash) requestAnimationFrame(() => document.getElementById(location.hash.slice(1))?.scrollIntoView())
-})
+}
 
 /** Requests grouped by folder path, in tree order. */
 const groups = computed(() => {
@@ -95,7 +120,8 @@ const enabledRows = (rows) => (rows || []).filter((r) => r.enabled !== false && 
 </script>
 
 <template>
-  <div class="min-h-screen bg-zinc-950 text-zinc-200">
+  <LoginScreen v-if="needsLogin" subtitle="Sign in to view these API docs." />
+  <div v-else class="min-h-screen bg-zinc-950 text-zinc-200">
     <div v-if="loading" class="flex h-screen items-center justify-center text-zinc-500"><Loader2 class="animate-spin" /></div>
     <div v-else-if="error" class="flex h-screen flex-col items-center justify-center gap-3 p-6 text-center">
       <Lock :size="28" class="text-zinc-600" />
@@ -105,7 +131,7 @@ const enabledRows = (rows) => (rows || []).filter((r) => r.enabled !== false && 
 
     <template v-else>
       <div v-if="preview" class="sticky top-0 z-20 bg-amber-500/90 px-4 py-1 text-center text-xs font-medium text-black">
-        Local preview. This is how the published docs will look. Nothing here is public until you publish.
+        Local preview. This is how the published docs will look. Nobody else can see this until you publish.
       </div>
       <div class="mx-auto flex max-w-7xl">
         <!-- Nav -->

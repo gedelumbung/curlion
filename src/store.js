@@ -30,6 +30,7 @@ export const state = reactive({
   history: [],
   user: null,
   roles: {}, // collectionId -> 'editor' | 'viewer' for collections shared with me
+  authReady: !supabase, // true once the Supabase session (if any) has been checked
   sync: { status: supabase ? 'signed-out' : 'local', message: '', lastAt: null },
   toasts: [],
 })
@@ -185,13 +186,14 @@ export async function init() {
   }
   saveTabs()
 
-  state.ready = true
-
   if (supabase) {
+    // With Supabase configured the app is sign-in only: resolve the session before showing anything.
     const { data } = await supabase.auth.getSession()
-    setUser(data.session?.user || null)
+    await setUser(data.session?.user || null)
     supabase.auth.onAuthStateChange((_event, session) => setUser(session?.user || null))
   }
+  state.authReady = true
+  state.ready = true
 }
 
 async function seedGettingStarted() {
@@ -571,14 +573,50 @@ export async function clearHistory() {
 
 // ---- Cloud sync (Supabase) ---------------------------------------------
 
-function setUser(user) {
+async function setUser(user) {
   const prev = state.user?.id
-  state.user = user ? { id: user.id, email: user.email } : null
   if (!user) {
+    state.user = null
     state.sync.status = 'signed-out'
     return
   }
-  if (prev !== user.id) syncAll()
+  if (prev === user.id) {
+    state.user = { id: user.id, email: user.email }
+    return
+  }
+  // Local data belongs to one account. If a different account signs in on this
+  // browser (e.g. the previous session expired), start from a clean slate.
+  const lastUserId = await getMeta('lastUserId')
+  if (lastUserId && lastUserId !== user.id) await clearLocalData()
+  await setMeta('lastUserId', user.id)
+  state.user = { id: user.id, email: user.email }
+  syncAll()
+}
+
+/** Remove the signed-in account's data from this browser (on sign-out / account switch). */
+async function clearLocalData() {
+  for (const id of [...controllers.keys()]) cancel(id)
+  await flushTimers('') // drop pending debounced saves/syncs of the old data
+  await db.transaction('rw', db.collections, db.environments, db.history, db.tombstones, async () => {
+    await Promise.all([db.collections.clear(), db.environments.clear(), db.history.clear(), db.tombstones.clear()])
+  })
+  await Promise.all(['tabs', 'active', 'activeEnvId', 'lastUserId'].map((k) => db.meta.delete(k)))
+  activityBase.clear()
+  pendingLogs.clear()
+  const globals = newEnvironment('Globals', true)
+  await db.environments.put(plain(globals))
+  Object.assign(state, {
+    collections: [],
+    environments: [globals],
+    history: [],
+    tabs: [],
+    active: null,
+    activeEnvId: null,
+    responses: {},
+    pending: {},
+    errors: {},
+    roles: {},
+  })
 }
 
 function scheduleSync(kind, id) {
@@ -740,10 +778,24 @@ async function mergeList(localList, remoteList, table, push) {
   }
 }
 
+/** Upload pending changes, sign out, then remove this account's data from the browser. */
 export async function signOut() {
-  await flushAllActivity()
-  await supabase?.auth.signOut()
-  state.roles = {}
+  if (state.user) {
+    try {
+      await db.transaction('rw', db.collections, db.environments, async () => {
+        await db.collections.bulkPut(state.collections.map(plain))
+        await db.environments.bulkPut(state.environments.map(plain))
+      })
+      await syncAll()
+      await flushAllActivity()
+    } catch (err) {
+      console.warn('Final sync before sign-out failed', err)
+    }
+  }
+  if (state.sync.status === 'error' && !confirm(`Some changes could not be synced (${state.sync.message}). Sign out anyway? They will be lost.`)) return
+  // 'local' drops this device's session even when offline (the refresh token is still revoked server-side)
+  await supabase?.auth.signOut({ scope: 'local' })
+  await clearLocalData()
 }
 
 // ---- Activity log -------------------------------------------------------

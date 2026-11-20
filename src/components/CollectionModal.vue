@@ -131,7 +131,7 @@ async function publish() {
 }
 
 async function unpublish() {
-  if (!confirm('Unpublish? The public link will stop working.')) return
+  if (!confirm('Unpublish? The docs link will stop working.')) return
   busy.value = true
   try {
     await unpublishDocs(col.value)
@@ -261,10 +261,10 @@ const tabs = [
         ></textarea>
 
         <div v-if="!online" class="mb-4 rounded border border-zinc-800 bg-zinc-900/60 p-3 text-zinc-400">
-          {{ cloudEnabled ? 'Sign in to publish a public link.' : 'Publishing needs Supabase configured.' }} You can still preview the docs locally.
+          {{ cloudEnabled ? 'Sign in to publish docs.' : 'Publishing needs Supabase configured.' }} You can still preview the docs locally.
         </div>
         <template v-else-if="isOwner">
-          <label class="mb-1 block text-xs text-zinc-500">Public address</label>
+          <label class="mb-1 block text-xs text-zinc-500">Docs address <span class="text-zinc-600">(readable by any signed-in Beacon user)</span></label>
           <div class="flex items-center rounded border border-zinc-700 bg-zinc-900 focus-within:border-zinc-500" :class="{ 'border-red-700': !slugValid }">
             <span class="pl-3 text-zinc-500">{{ docsUrl('') }}</span>
             <input v-model="slug" class="min-w-0 flex-1 bg-transparent py-1.5 pr-3 font-mono outline-none" @input="slug = slug.toLowerCase()" />

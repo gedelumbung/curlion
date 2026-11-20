@@ -1,10 +1,10 @@
-// Netlify Edge Function: public mock endpoint.
+// Netlify Edge Function: mock endpoint.
 //   GET|POST|... /mock/<collection_id>/<sample_id>
 // Returns the status, headers and body of a saved sample from Supabase.
 //
-// Env vars (Netlify site settings):
-//   SUPABASE_URL, SUPABASE_ANON_KEY            required
-//   SUPABASE_SERVICE_ROLE_KEY                  optional; without it only public collections (is_public = true) can be mocked
+// Env vars (Netlify site settings), both required:
+//   SUPABASE_URL
+//   SUPABASE_SERVICE_ROLE_KEY   (mark as secret; anon has no database access)
 
 const env = (k) => globalThis.Netlify?.env.get(k) ?? globalThis.Deno?.env.get(k)
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -39,22 +39,17 @@ export default async (request) => {
     return json(400, { error: 'Mock URL must look like /mock/<collection_id>/<sample_id>' })
   }
 
+  // The anon role has no database access (sign-in only), so mocks read on the
+  // server with the service role key. Collection and sample ids are random UUIDs.
   const base = env('SUPABASE_URL')
-  const serviceKey = env('SUPABASE_SERVICE_ROLE_KEY')
-  const key = serviceKey || env('SUPABASE_ANON_KEY')
-  if (!base || !key) return json(500, { error: 'Mock server is not configured (SUPABASE_URL / key missing)' })
+  const key = env('SUPABASE_SERVICE_ROLE_KEY')
+  if (!base || !key) return json(500, { error: 'Mock server is not configured (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY missing)' })
 
-  // With the service role key: live data of any synced collection.
-  // With only the anon key: the published docs snapshot (collection must be published).
-  const endpoint = serviceKey
-    ? `${base}/rest/v1/collections?id=eq.${collectionId}&select=items:tree_data->items`
-    : `${base}/rest/v1/published_docs?collection_id=eq.${collectionId}&select=items:data->items`
+  const endpoint = `${base}/rest/v1/collections?id=eq.${collectionId}&select=items:tree_data->items`
   const res = await fetch(endpoint, { headers: { apikey: key, Authorization: `Bearer ${key}` } })
   if (!res.ok) return json(502, { error: 'Could not load collection', detail: await res.text() })
   const rows = await res.json()
-  if (!rows.length) {
-    return json(404, { error: serviceKey ? 'Collection not found' : 'Collection not found or not published (publish its docs to enable mocks)' })
-  }
+  if (!rows.length) return json(404, { error: 'Collection not found (sync it first)' })
 
   const sample = findSample(rows[0].items, sampleId)
   if (!sample) return json(404, { error: 'Sample not found' })
