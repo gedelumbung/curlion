@@ -2,6 +2,7 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { Cloud, CloudOff, Globe2, Info, Loader2, LogOut, Monitor, Moon, Settings2, Sun, Zap } from 'lucide-vue-next'
 import { setDark, theme } from './lib/theme.js'
+import { vTopLayer } from './lib/topLayer.js'
 import Sidebar from './components/Sidebar.vue'
 import RequestEditor from './components/RequestEditor.vue'
 import ResponseViewer from './components/ResponseViewer.vue'
@@ -168,7 +169,7 @@ const syncLabel = {
       </div>
     </header>
 
-    <div :inert="!!modal" class="flex min-h-0 flex-1" :class="{ invisible: modal, 'select-none': dragging, 'cursor-col-resize': dragging === 'sidebar', 'cursor-row-resize': dragging === 'split' }">
+    <div :inert="!!modal" class="flex min-h-0 flex-1" :class="{ 'select-none': dragging, 'cursor-col-resize': dragging === 'sidebar', 'cursor-row-resize': dragging === 'split' }">
       <Sidebar v-show="sidebarOpen" class="shrink-0" :style="{ width: sidebarWidth + 'px' }" @import="modal = 'import'" @collection="openCollection" />
       <div
         v-show="sidebarOpen"
@@ -211,19 +212,21 @@ const syncLabel = {
     <AuthModal v-if="modal === 'auth'" @close="modal = null" />
     <CollectionModal v-if="modal === 'collection'" :collection="collectionCtx.col" :initial-tab="collectionCtx.tab" @close="modal = null" />
 
-    <!-- Toasts -->
-    <div class="pointer-events-none fixed right-4 bottom-4 z-50 flex flex-col gap-2">
-      <div
-        v-for="t in state.toasts"
-        :key="t.id"
-        class="pointer-events-auto max-w-sm rounded-md border px-3 py-2 text-sm shadow-lg"
-        :class="{
-          'border-emerald-800 bg-emerald-950 text-emerald-200': t.type === 'success',
-          'border-red-800 bg-red-950 text-red-200': t.type === 'error',
-          'border-zinc-700 bg-zinc-800 text-zinc-200': t.type === 'info',
-        }"
-      >
-        {{ t.message }}
+    <!-- Toasts: top layer, re-shown for each new toast so they sit above any open modal -->
+    <div v-if="state.toasts.length" :key="state.toasts.at(-1).id" v-top-layer class="top-layer passthrough">
+      <div class="absolute right-4 bottom-4 flex flex-col gap-2">
+        <div
+          v-for="t in state.toasts"
+          :key="t.id"
+          class="pointer-events-auto max-w-sm rounded-md border px-3 py-2 text-sm shadow-lg"
+          :class="{
+            'border-emerald-800 bg-emerald-950 text-emerald-200': t.type === 'success',
+            'border-red-800 bg-red-950 text-red-200': t.type === 'error',
+            'border-zinc-700 bg-zinc-800 text-zinc-200': t.type === 'info',
+          }"
+        >
+          {{ t.message }}
+        </div>
       </div>
     </div>
   </div>

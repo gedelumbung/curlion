@@ -2,6 +2,8 @@
 import { Decoration, EditorView, MatchDecorator, ViewPlugin } from '@codemirror/view'
 import { StateEffect } from '@codemirror/state'
 import { autocompletion } from '@codemirror/autocomplete'
+import { HighlightStyle } from '@codemirror/language'
+import { tags as t } from '@lezer/highlight'
 import { DYNAMIC_DESCRIPTIONS, DYNAMIC_VARS } from './variables.js'
 
 /** Dispatch this effect to re-evaluate highlighting after the variable scope changes. */
@@ -73,6 +75,32 @@ export function variableCompletion(getScope) {
     ],
   })
 }
+
+/** Syntax colors for the dark theme (Dracula). */
+export const draculaHighlightStyle = HighlightStyle.define([
+  { tag: [t.keyword, t.operatorKeyword, t.modifier, t.controlKeyword], color: '#ff79c6' },
+  { tag: [t.propertyName, t.attributeName], color: '#8be9fd' },
+  { tag: [t.string, t.special(t.string), t.regexp], color: '#f1fa8c' },
+  { tag: [t.number, t.bool, t.null, t.atom], color: '#bd93f9' },
+  { tag: [t.tagName, t.typeName, t.className], color: '#ff79c6' },
+  { tag: [t.function(t.variableName), t.function(t.propertyName)], color: '#50fa7b' },
+  { tag: [t.comment, t.meta], color: '#6272a4', fontStyle: 'italic' },
+  { tag: [t.punctuation, t.separator, t.bracket, t.operator], color: '#f8f8f2' },
+  { tag: t.invalid, color: '#ff5555' },
+])
+
+/** Syntax colors for the light theme: muted, low-glare. */
+export const softLightHighlightStyle = HighlightStyle.define([
+  { tag: [t.keyword, t.operatorKeyword, t.modifier, t.controlKeyword], color: '#8a4f9e' },
+  { tag: [t.propertyName, t.attributeName], color: '#2f6690' },
+  { tag: [t.string, t.special(t.string), t.regexp], color: '#4d7c3a' },
+  { tag: [t.number, t.bool, t.null, t.atom], color: '#a65a3a' },
+  { tag: [t.tagName, t.typeName, t.className], color: '#8a4f9e' },
+  { tag: [t.function(t.variableName), t.function(t.propertyName)], color: '#2f6690' },
+  { tag: [t.comment, t.meta], color: '#8b919c', fontStyle: 'italic' },
+  { tag: [t.punctuation, t.separator, t.bracket, t.operator], color: '#5d6473' },
+  { tag: t.invalid, color: '#c0392b' },
+])
 
 export const baseTheme = EditorView.theme(
   {

@@ -1,30 +1,32 @@
 <script setup>
+// Rendered with <dialog>.showModal() so it lives in the browser's top layer:
+// it always paints above the app, whatever z-index or compositing the page uses.
 import { X } from 'lucide-vue-next'
-import { onBeforeUnmount, onMounted } from 'vue'
+import { onMounted, ref, useId } from 'vue'
 
 defineProps({ title: String, width: { type: String, default: 'max-w-2xl' } })
 const emit = defineEmits(['close'])
-const onKey = (e) => e.key === 'Escape' && emit('close')
-onMounted(() => window.addEventListener('keydown', onKey))
-onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
+const dialog = ref(null)
+const titleId = useId()
+
+onMounted(() => dialog.value.showModal())
 </script>
 
 <template>
-  <Teleport to="body">
-    <div
-      class="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto p-4 pt-[8vh]"
-      style="background-color: color-mix(in srgb, var(--color-zinc-950) 85%, transparent)"
-      @mousedown.self="emit('close')"
-    >
+  <dialog
+    ref="dialog"
+    class="modal-dialog"
+    :aria-labelledby="titleId"
+    @cancel.prevent="emit('close')"
+    @close="emit('close')"
+  >
+    <div class="flex min-h-full items-start justify-center p-4 pt-[8vh]" @mousedown.self="emit('close')">
       <div
-        class="flex max-h-[84vh] w-full flex-col rounded-lg border border-zinc-700 shadow-2xl ring-1 shadow-black/60 ring-black/40"
-        style="background-color: var(--color-zinc-900)"
+        class="flex max-h-[84vh] w-full flex-col rounded-lg border border-zinc-700 bg-zinc-900 text-zinc-200 shadow-2xl ring-1 shadow-black/60 ring-black/40"
         :class="width"
-        role="dialog"
-        aria-modal="true"
       >
         <header class="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
-          <h2 class="font-semibold">{{ title }}</h2>
+          <h2 :id="titleId" class="font-semibold">{{ title }}</h2>
           <button class="rounded p-1 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100" @click="emit('close')"><X :size="18" /></button>
         </header>
         <div class="min-h-0 flex-1 overflow-auto">
@@ -35,5 +37,5 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
         </footer>
       </div>
     </div>
-  </Teleport>
+  </dialog>
 </template>

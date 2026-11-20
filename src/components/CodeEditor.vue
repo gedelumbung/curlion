@@ -8,9 +8,8 @@ import { indentWithTab } from '@codemirror/commands'
 import { json } from '@codemirror/lang-json'
 import { xml } from '@codemirror/lang-xml'
 import { html } from '@codemirror/lang-html'
-import { oneDarkHighlightStyle } from '@codemirror/theme-one-dark'
-import { defaultHighlightStyle, syntaxHighlighting } from '@codemirror/language'
-import { baseTheme, refreshVars, variableCompletion, variableHighlighter } from '../lib/cm.js'
+import { syntaxHighlighting } from '@codemirror/language'
+import { baseTheme, draculaHighlightStyle, refreshVars, softLightHighlightStyle, variableCompletion, variableHighlighter } from '../lib/cm.js'
 import { scope } from '../store.js'
 import { theme } from '../lib/theme.js'
 
@@ -28,7 +27,7 @@ let view = null
 const langConf = new Compartment()
 const wrapConf = new Compartment()
 const highlightConf = new Compartment()
-const highlightExt = (t) => syntaxHighlighting(t === 'light' ? defaultHighlightStyle : oneDarkHighlightStyle)
+const highlightExt = (t) => syntaxHighlighting(t === 'light' ? softLightHighlightStyle : draculaHighlightStyle)
 
 const langExt = (l) => (l === 'json' ? json() : l === 'xml' ? xml() : l === 'html' ? html() : [])
 

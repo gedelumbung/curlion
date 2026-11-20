@@ -18,6 +18,7 @@ import {
   touchCollection,
 } from '../store.js'
 import { findNode } from '../lib/model.js'
+import { vTopLayer } from '../lib/topLayer.js'
 import { exportPostman } from '../lib/postman.js'
 import { downloadJson, methodColor, statusColor } from '../lib/ui.js'
 
@@ -218,7 +219,7 @@ const fmtTime = (ts) => new Date(ts).toLocaleString(undefined, { hour: '2-digit'
 
     <!-- Context menu -->
     <Teleport to="body">
-      <div v-if="menu" class="fixed inset-0 isolate z-[1000]" @click="menu = null" @contextmenu.prevent="menu = null">
+      <div v-if="menu" v-top-layer class="top-layer" @click="menu = null" @contextmenu.prevent="menu = null">
         <div class="absolute w-52 rounded-md border border-zinc-700 bg-zinc-800 py-1 text-sm shadow-xl" :style="{ left: menu.x + 'px', top: menu.y + 'px' }" @click.stop>
           <template v-for="item in menu.items" :key="item.label">
             <button class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-zinc-700" :class="item.danger ? 'text-red-400' : 'text-zinc-200'" @click="runItem(item)">

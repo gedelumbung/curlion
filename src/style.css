@@ -3,68 +3,70 @@
 @theme {
   --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  /* Tailwind v4 ships its palette as oklch() with no fallback, which some
-     browsers ignore (transparent menus/modals). Redefine the shades we use in hex. */
-  --color-zinc-100: #f4f4f5;
-  --color-zinc-200: #e4e4e7;
-  --color-zinc-300: #d4d4d8;
-  --color-zinc-400: #a1a1aa;
-  --color-zinc-500: #71717a;
-  --color-zinc-600: #52525b;
-  --color-zinc-700: #3f3f46;
-  --color-zinc-800: #27272a;
-  --color-zinc-900: #18181b;
-  --color-zinc-925: #121215;
-  --color-zinc-950: #09090b;
-  --color-red-200: #fecaca;
-  --color-red-300: #fca5a5;
-  --color-red-400: #f87171;
+  /* Palette in hex (Tailwind v4 ships oklch() with no fallback).
+     Dark theme = Dracula (https://draculatheme.com): the zinc scale is Dracula's
+     background/selection/comment/foreground ramp, accent text shades are Dracula colors. */
+  --color-zinc-100: #ffffff;
+  --color-zinc-200: #f8f8f2; /* foreground */
+  --color-zinc-300: #e2e2dc;
+  --color-zinc-400: #bfc1d4;
+  --color-zinc-500: #8c93b8;
+  --color-zinc-600: #6272a4; /* comment */
+  --color-zinc-700: #4f5268;
+  --color-zinc-800: #44475a; /* current line / selection */
+  --color-zinc-900: #343746;
+  --color-zinc-925: #21222c; /* darker background (sidebar) */
+  --color-zinc-950: #282a36; /* background */
+  --color-red-200: #ffb3b3;
+  --color-red-300: #ff8080;
+  --color-red-400: #ff5555; /* red */
   --color-red-500: #ef4444;
   --color-red-700: #b91c1c;
-  --color-red-800: #991b1b;
-  --color-red-900: #7f1d1d;
-  --color-red-950: #450a0a;
-  --color-orange-400: #fb923c;
+  --color-red-800: #7a3540;
+  --color-red-900: #5c2e36;
+  --color-red-950: #3f2a33;
+  --color-orange-400: #ffb86c; /* orange */
   --color-orange-500: #f97316;
   --color-orange-600: #ea580c;
   --color-orange-700: #c2410c;
-  --color-amber-300: #fcd34d;
-  --color-amber-400: #fbbf24;
+  --color-amber-300: #f6fbb4;
+  --color-amber-400: #f1fa8c; /* yellow */
   --color-amber-500: #f59e0b;
-  --color-amber-900: #78350f;
-  --color-amber-950: #451a03;
-  --color-emerald-200: #a7f3d0;
-  --color-emerald-300: #6ee7b7;
-  --color-emerald-400: #34d399;
+  --color-amber-900: #5c5536;
+  --color-amber-950: #3d3a2e;
+  --color-emerald-200: #b9fdc9;
+  --color-emerald-300: #86fca3;
+  --color-emerald-400: #50fa7b; /* green */
   --color-emerald-500: #10b981;
-  --color-emerald-800: #065f46;
-  --color-emerald-950: #022c22;
-  --color-sky-300: #7dd3fc;
-  --color-sky-400: #38bdf8;
+  --color-emerald-800: #2f6b46;
+  --color-emerald-950: #263d34;
+  --color-sky-300: #b5f2fe;
+  --color-sky-400: #8be9fd; /* cyan */
   --color-sky-500: #0ea5e9;
-  --color-sky-900: #0c4a6e;
-  --color-sky-950: #082f49;
-  --color-teal-400: #2dd4bf;
-  --color-violet-300: #c4b5fd;
-  --color-violet-400: #a78bfa;
-  --color-pink-400: #f472b6;
+  --color-sky-900: #2f5468;
+  --color-sky-950: #273a48;
+  --color-teal-400: #6be5d6;
+  --color-violet-300: #d6bcfc;
+  --color-violet-400: #bd93f9; /* purple */
+  --color-pink-400: #ff79c6; /* pink */
 }
 
 /* Light theme: the UI is written dark-first on the zinc scale, so light mode inverts
-   that scale and darkens accent text shades (and lightens accent tint backgrounds). */
+   that scale and darkens accent text shades (and lightens accent tint backgrounds).
+   Kept soft on purpose: off-white surfaces (no pure white) and slate text (no pure black). */
 :root[data-theme='light'] {
   color-scheme: light;
-  --color-zinc-100: #18181b;
-  --color-zinc-200: #27272a;
-  --color-zinc-300: #3f3f46;
-  --color-zinc-400: #52525b;
-  --color-zinc-500: #71717a;
-  --color-zinc-600: #a1a1aa;
-  --color-zinc-700: #d4d4d8;
-  --color-zinc-800: #e4e4e7;
-  --color-zinc-900: #f4f4f5;
-  --color-zinc-925: #f7f7f8;
-  --color-zinc-950: #ffffff;
+  --color-zinc-100: #232834;
+  --color-zinc-200: #343a46; /* body text */
+  --color-zinc-300: #474e5c;
+  --color-zinc-400: #5d6473;
+  --color-zinc-500: #7a808d;
+  --color-zinc-600: #9ca1ac;
+  --color-zinc-700: #cdd1d8; /* borders */
+  --color-zinc-800: #dde0e5; /* subtle borders, hover, menus */
+  --color-zinc-900: #f3f4f6; /* inputs, panels, modals */
+  --color-zinc-925: #e4e7eb; /* sidebar */
+  --color-zinc-950: #eceef1; /* page background */
   --color-red-200: #991b1b;
   --color-red-300: #b91c1c;
   --color-red-400: #dc2626;
@@ -92,6 +94,11 @@
 }
 :root {
   color-scheme: dark;
+  /* translucent layer behind modals: the app stays faintly visible underneath */
+  --modal-scrim: rgb(20 21 28 / 0.6);
+}
+:root[data-theme='light'] {
+  --modal-scrim: rgb(35 40 52 / 0.35);
 }
 
 html,
@@ -112,6 +119,36 @@ select {
   background-position: right 0.6rem center;
   background-size: 12px;
   padding-right: 1.9rem;
+}
+
+/* Modals and popups live in the browser top layer (<dialog>.showModal(), popover).
+   Reset the UA box so they behave like a full-viewport transparent overlay. */
+.modal-dialog,
+.top-layer {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  overflow: visible;
+  z-index: 1000; /* fallback when the top layer is unavailable */
+}
+.modal-dialog {
+  overflow-y: auto;
+}
+.modal-dialog::backdrop {
+  background-color: var(--modal-scrim);
+  backdrop-filter: blur(2px);
+}
+/* pass clicks through the empty parts of non-modal layers (toasts) */
+.top-layer.passthrough {
+  pointer-events: none;
 }
 
 /* {{variable}} highlighting in CodeMirror */

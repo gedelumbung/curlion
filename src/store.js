@@ -238,6 +238,8 @@ async function seedGettingStarted() {
   await db.collections.put(plain(col))
   await db.environments.put(plain(dev))
   await setMeta('activeEnvId', dev.id)
+  await setMeta('expanded', { ...state.expanded })
+  await setMeta('active', { ...state.active })
 }
 
 // ---- Settings -----------------------------------------------------------
