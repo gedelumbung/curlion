@@ -68,9 +68,9 @@ export async function sendRequest(resolved, opts = {}) {
     // Target info travels in headers; the body is streamed through untouched.
     const ct = resolved.headers.find((h) => h.key.toLowerCase() === 'content-type')
     if (ct && !(body instanceof FormData)) headers.set('Content-Type', ct.value)
-    headers.set('X-PostLite-Url', resolved.url)
-    headers.set('X-PostLite-Method', resolved.method)
-    headers.set('X-PostLite-Headers', encodeURIComponent(JSON.stringify(resolved.headers)))
+    headers.set('X-Echo-Url', resolved.url)
+    headers.set('X-Echo-Method', resolved.method)
+    headers.set('X-Echo-Headers', encodeURIComponent(JSON.stringify(resolved.headers)))
     fetchUrl = PROXY_PATH
     init = { method: 'POST', headers, body: body ?? '', signal }
   } else {
@@ -100,19 +100,19 @@ export async function sendRequest(resolved, opts = {}) {
     throw e
   }
 
-  if (mode === 'proxy' && res.headers.get('x-postlite-error')) {
+  if (mode === 'proxy' && res.headers.get('x-echo-error')) {
     throw new Error('Proxy error: ' + (await res.text()))
   }
 
   const blob = await res.blob()
   const time = Math.round(performance.now() - started)
 
-  const status = mode === 'proxy' ? Number(res.headers.get('x-postlite-status') || res.status) : res.status
-  const statusText = mode === 'proxy' ? res.headers.get('x-postlite-status-text') || res.statusText : res.statusText
+  const status = mode === 'proxy' ? Number(res.headers.get('x-echo-status') || res.status) : res.status
+  const statusText = mode === 'proxy' ? res.headers.get('x-echo-status-text') || res.statusText : res.statusText
 
   let responseHeaders = []
-  if (mode === 'proxy' && res.headers.get('x-postlite-headers')) {
-    responseHeaders = JSON.parse(decodeURIComponent(res.headers.get('x-postlite-headers')))
+  if (mode === 'proxy' && res.headers.get('x-echo-headers')) {
+    responseHeaders = JSON.parse(decodeURIComponent(res.headers.get('x-echo-headers')))
   } else {
     res.headers.forEach((value, key) => responseHeaders.push({ key, value }))
   }

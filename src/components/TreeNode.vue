@@ -54,12 +54,12 @@ function commit() {
 // drag & drop (within one collection)
 const dropHint = ref(false)
 function onDragStart(e) {
-  e.dataTransfer.setData('application/x-postlite', JSON.stringify({ collectionId: props.collection.id, id: props.node.id }))
+  e.dataTransfer.setData('application/x-echo', JSON.stringify({ collectionId: props.collection.id, id: props.node.id }))
   e.dataTransfer.effectAllowed = 'move'
 }
 function onDrop(e) {
   dropHint.value = false
-  const raw = e.dataTransfer.getData('application/x-postlite')
+  const raw = e.dataTransfer.getData('application/x-echo')
   if (!raw) return
   const { collectionId, id } = JSON.parse(raw)
   if (collectionId !== props.collection.id || id === props.node.id) return

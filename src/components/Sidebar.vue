@@ -1,8 +1,9 @@
 <script setup>
 import { computed, nextTick, ref } from 'vue'
-import { ChevronRight, Clock, Copy, Download, FilePlus, FolderPlus, Globe, History, Layers, LogOut, MoreHorizontal, Pencil, Plus, Search, Trash2, Upload, Users } from 'lucide-vue-next'
+import { ChevronRight, Clock, Copy, Download, FilePlus, FolderPlus, Globe, History, Layers, LogOut, MoreHorizontal, Pencil, Plus, Search, Sparkles, Trash2, Upload, Users } from 'lucide-vue-next'
 import TreeNode from './TreeNode.vue'
 import {
+  addSampleCollection,
   addFolder,
   addRequest,
   clearHistory,
@@ -26,6 +27,7 @@ const renamingId = ref(null)
 const menu = ref(null) // { x, y, items }
 
 const q = computed(() => state.search.trim().toLowerCase())
+const hasSample = computed(() => q.value || state.collections.some((c) => c.name === 'Getting Started'))
 function colVisible(col) {
   if (!q.value) return true
   if (col.name.toLowerCase().includes(q.value)) return true
@@ -186,6 +188,13 @@ const fmtTime = (ts) => new Date(ts).toLocaleString(undefined, { hour: '2-digit'
           No collections yet.
           <button class="mt-2 block w-full rounded bg-zinc-800 py-1.5 text-zinc-200 hover:bg-zinc-700" @click="newCollection">Create collection</button>
         </div>
+        <button
+          v-if="!hasSample"
+          class="mx-2 mt-3 flex w-[calc(100%-1rem)] items-center justify-center gap-1.5 rounded border border-dashed border-zinc-700 py-1.5 text-xs text-zinc-500 hover:border-zinc-500 hover:text-zinc-300"
+          @click="addSampleCollection"
+        >
+          <Sparkles :size="13" /> Add "Getting Started" sample
+        </button>
       </div>
     </template>
 
@@ -209,7 +218,7 @@ const fmtTime = (ts) => new Date(ts).toLocaleString(undefined, { hour: '2-digit'
 
     <!-- Context menu -->
     <Teleport to="body">
-      <div v-if="menu" class="fixed inset-0 z-30" @click="menu = null" @contextmenu.prevent="menu = null">
+      <div v-if="menu" class="fixed inset-0 isolate z-[1000]" @click="menu = null" @contextmenu.prevent="menu = null">
         <div class="absolute w-52 rounded-md border border-zinc-700 bg-zinc-800 py-1 text-sm shadow-xl" :style="{ left: menu.x + 'px', top: menu.y + 'px' }" @click.stop>
           <template v-for="item in menu.items" :key="item.label">
             <button class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-zinc-700" :class="item.danger ? 'text-red-400' : 'text-zinc-200'" @click="runItem(item)">

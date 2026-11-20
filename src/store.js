@@ -1,6 +1,6 @@
 // Global app store: state, persistence (IndexedDB) and cloud sync (Supabase).
 import { computed, reactive, toRaw } from 'vue'
-import { db, getMeta, setMeta } from './db/index.js'
+import { db, getMeta, migrateLegacyDb, setMeta } from './db/index.js'
 import { clone, findNode, kv, newCollection, newEnvironment, newFolder, newRequest, reId, uid } from './lib/model.js'
 import { buildScope, getByPath } from './lib/variables.js'
 import { resolveRequest } from './lib/resolve.js'
@@ -131,6 +131,11 @@ export async function saveNow() {
 // ---- Init ---------------------------------------------------------------
 
 export async function init() {
+  try {
+    await migrateLegacyDb()
+  } catch (err) {
+    console.warn('Legacy data migration failed', err)
+  }
   const [cols, envs, history, activeEnvId, mode, active, expanded] = await Promise.all([
     db.collections.toArray(),
     db.environments.toArray(),
@@ -172,12 +177,30 @@ export async function init() {
   }
 }
 
+/** Sidebar action: add the "Getting Started" example collection again. */
+export async function addSampleCollection() {
+  await seedGettingStarted()
+  const col = state.collections.at(-1)
+  scheduleSync('col', col.id)
+  const dev = state.environments.find((e) => e.id === state.activeEnvId)
+  if (dev) scheduleSync('env', dev.id)
+  toast('Added the "Getting Started" sample collection', 'success')
+}
+
 async function seedGettingStarted() {
-  const dev = newEnvironment('Development')
-  dev.variables = [
-    { id: uid(), key: 'baseUrl', value: 'https://dummyjson.com', enabled: true, isSecret: false },
-    { id: uid(), key: 'token', value: '', enabled: true, isSecret: true },
-  ]
+  // reuse an existing Development env that points at dummyjson, otherwise create one
+  let dev = state.environments.find((e) => !e.isGlobal && e.variables.some((v) => v.key === 'baseUrl' && v.value === 'https://dummyjson.com'))
+  const newEnv = !dev
+  if (newEnv) {
+    dev = newEnvironment('Development')
+    dev.variables = [
+      { id: uid(), key: 'baseUrl', value: 'https://dummyjson.com', enabled: true, isSecret: false },
+      { id: uid(), key: 'token', value: '', enabled: true, isSecret: true },
+    ]
+  } else if (!dev.variables.some((v) => v.key === 'token')) {
+    dev.variables.push({ id: uid(), key: 'token', value: '', enabled: true, isSecret: true })
+    dev.updatedAt = new Date().toISOString()
+  }
 
   const col = newCollection('Getting Started')
   col.description = 'Example requests. Run "Login" first: its Extract rule saves the token into {{token}}.'
@@ -207,7 +230,7 @@ async function seedGettingStarted() {
 
   col.items.push(auth, products, create, image)
   state.collections.push(col)
-  state.environments.push(dev)
+  if (newEnv) state.environments.push(dev)
   state.activeEnvId = dev.id
   state.expanded[col.id] = true
   state.expanded[auth.id] = true

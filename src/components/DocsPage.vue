@@ -25,7 +25,7 @@ onMounted(async () => {
       if (!col) throw new Error('Collection not found in this browser.')
       doc.value = { ...buildDocsSnapshot(col), publishedAt: null }
     } else {
-      if (!supabase) throw new Error('This PostLite instance is not connected to a database.')
+      if (!supabase) throw new Error('This Echo instance is not connected to a database.')
       const { data, error: e } = await supabase.from('published_docs').select('name, description, data, published_at').eq('slug', props.id).maybeSingle()
       if (e) throw e
       if (!data) throw new Error('These docs do not exist or are no longer public.')
@@ -100,7 +100,7 @@ const enabledRows = (rows) => (rows || []).filter((r) => r.enabled !== false && 
     <div v-else-if="error" class="flex h-screen flex-col items-center justify-center gap-3 p-6 text-center">
       <Lock :size="28" class="text-zinc-600" />
       <p class="text-zinc-300">{{ error }}</p>
-      <a href="/" class="text-sm text-orange-400 hover:underline">Open PostLite</a>
+      <a href="/" class="text-sm text-orange-400 hover:underline">Open Echo</a>
     </div>
 
     <template v-else>
@@ -123,7 +123,7 @@ const enabledRows = (rows) => (rows || []).filter((r) => r.enabled !== false && 
         <!-- Content -->
         <main id="top" class="min-w-0 flex-1 px-4 py-8 sm:px-8">
           <header class="mb-10 border-b border-zinc-800 pb-8">
-            <h1 class="text-3xl font-bold text-white">{{ doc.name }}</h1>
+            <h1 class="text-3xl font-bold text-zinc-100">{{ doc.name }}</h1>
             <p v-for="(p, i) in paragraphs(doc.description)" :key="i" class="mt-3 max-w-3xl whitespace-pre-line text-zinc-400">{{ p }}</p>
             <p class="mt-4 text-xs text-zinc-600">
               {{ groups.reduce((n, g) => n + g.requests.length, 0) }} endpoints
@@ -141,7 +141,7 @@ const enabledRows = (rows) => (rows || []).filter((r) => r.enabled !== false && 
 
             <article v-for="r in g.requests" :id="anchor(r)" :key="r.id" class="mb-12 grid scroll-mt-6 gap-6 xl:grid-cols-2">
               <div class="min-w-0">
-                <h3 class="text-lg font-semibold text-white">{{ r.name }}</h3>
+                <h3 class="text-lg font-semibold text-zinc-100">{{ r.name }}</h3>
                 <div class="mt-2 flex items-center gap-2 rounded border border-zinc-800 bg-zinc-900 px-3 py-2 font-mono text-[13px]">
                   <span class="font-bold" :class="methodColor[r.method]">{{ r.method }}</span>
                   <span class="min-w-0 break-all text-zinc-300">{{ r.url }}</span>
@@ -213,7 +213,7 @@ const enabledRows = (rows) => (rows || []).filter((r) => r.enabled !== false && 
           </section>
 
           <p v-if="!groups.length" class="text-zinc-500">This collection has no requests yet.</p>
-          <footer class="mt-16 border-t border-zinc-800 pt-6 text-xs text-zinc-600">Published with PostLite</footer>
+          <footer class="mt-16 border-t border-zinc-800 pt-6 text-xs text-zinc-600">Published with Echo</footer>
         </main>
       </div>
     </template>

@@ -1,4 +1,4 @@
-// Factories for PostLite's internal data model.
+// Factories for Echo's internal data model.
 // Collection.items holds a tree of folders and requests; this tree is what
 // gets stored in Supabase `collections.tree_data` (as { items }).
 

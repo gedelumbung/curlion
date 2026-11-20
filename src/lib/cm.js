@@ -80,13 +80,12 @@ export const baseTheme = EditorView.theme(
     '.cm-content': { fontFamily: 'var(--font-mono)', caretColor: 'var(--color-orange-400)' },
     '&.cm-focused': { outline: 'none' },
     '.cm-gutters': { backgroundColor: 'transparent', border: 'none', color: 'var(--color-zinc-600)' },
-    '.cm-activeLine, .cm-activeLineGutter': { backgroundColor: 'rgb(255 255 255 / 0.03)' },
+    '.cm-activeLine, .cm-activeLineGutter': { backgroundColor: 'rgb(128 128 128 / 0.07)' },
     '.cm-tooltip': { backgroundColor: 'var(--color-zinc-800)', border: '1px solid var(--color-zinc-700)', borderRadius: '6px' },
     '.cm-tooltip-autocomplete > ul > li[aria-selected]': { backgroundColor: 'var(--color-orange-500)', color: 'white' },
     '.cm-completionDetail': { color: 'var(--color-zinc-400)', marginLeft: '1em', fontStyle: 'normal' },
     '.cm-selectionBackground, &.cm-focused .cm-selectionBackground': { backgroundColor: 'rgb(249 115 22 / 0.25) !important' },
   },
-  { dark: true },
 )
 
 export const singleLineTheme = EditorView.theme({

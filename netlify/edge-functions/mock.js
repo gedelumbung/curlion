@@ -66,7 +66,7 @@ export default async (request) => {
       headers.set(h.key, h.value ?? '')
     } catch {}
   }
-  headers.set('X-PostLite-Mock', sample.name || 'sample')
+  headers.set('X-Echo-Mock', sample.name || 'sample')
 
   const status = Number(sample.status) || 200
   const noBody = request.method === 'HEAD' || [204, 205, 304].includes(status)

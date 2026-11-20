@@ -1,6 +1,7 @@
 <script setup>
 import { onBeforeUnmount, onMounted, ref } from 'vue'
-import { Cloud, CloudOff, Globe2, Info, Loader2, LogOut, Monitor, Settings2, Zap } from 'lucide-vue-next'
+import { Cloud, CloudOff, Globe2, Info, Loader2, LogOut, Monitor, Moon, Settings2, Sun, Zap } from 'lucide-vue-next'
+import { setDark, theme } from './lib/theme.js'
 import Sidebar from './components/Sidebar.vue'
 import RequestEditor from './components/RequestEditor.vue'
 import ResponseViewer from './components/ResponseViewer.vue'
@@ -18,6 +19,54 @@ function openCollection(ctx) {
   modal.value = 'collection'
 }
 const sidebarOpen = ref(true)
+
+// ---- Resizable panes (sidebar width, request/response split), remembered per browser
+const SIDEBAR_DEFAULT = 288
+const SPLIT_DEFAULT = 0.5
+function loadNum(key, fallback) {
+  try {
+    const n = parseFloat(localStorage.getItem(key))
+    return Number.isFinite(n) ? n : fallback
+  } catch {
+    return fallback
+  }
+}
+function saveNum(key, n) {
+  try {
+    localStorage.setItem(key, String(n))
+  } catch {}
+}
+const clamp = (n, min, max) => Math.min(max, Math.max(min, n))
+const sidebarWidth = ref(loadNum('echo.sidebarWidth', SIDEBAR_DEFAULT))
+const split = ref(loadNum('echo.split', SPLIT_DEFAULT)) // request editor share of the main column
+const mainEl = ref(null)
+const dragging = ref(null) // 'sidebar' | 'split'
+
+function startDrag(kind, e) {
+  e.preventDefault()
+  dragging.value = kind
+  const move = (ev) => {
+    if (kind === 'sidebar') {
+      sidebarWidth.value = clamp(ev.clientX, 200, Math.min(640, window.innerWidth - 360))
+    } else {
+      const r = mainEl.value.getBoundingClientRect()
+      split.value = clamp((ev.clientY - r.top) / r.height, 0.15, 0.85)
+    }
+  }
+  const up = () => {
+    dragging.value = null
+    window.removeEventListener('pointermove', move)
+    window.removeEventListener('pointerup', up)
+    saveNum('echo.sidebarWidth', sidebarWidth.value)
+    saveNum('echo.split', split.value)
+  }
+  window.addEventListener('pointermove', move)
+  window.addEventListener('pointerup', up)
+}
+function resetPane(kind) {
+  if (kind === 'sidebar') saveNum('echo.sidebarWidth', (sidebarWidth.value = SIDEBAR_DEFAULT))
+  else saveNum('echo.split', (split.value = SPLIT_DEFAULT))
+}
 
 function onKey(e) {
   const mod = e.metaKey || e.ctrlKey
@@ -59,16 +108,16 @@ const syncLabel = {
     <header :inert="!!modal" class="flex h-12 shrink-0 items-center gap-3 border-b border-zinc-800 px-3">
       <button class="flex items-center gap-2 font-semibold" title="Toggle sidebar" @click="sidebarOpen = !sidebarOpen">
         <img src="/favicon.svg" class="h-6 w-6" alt="" />
-        <span class="hidden sm:inline">PostLite</span>
+        <span class="hidden sm:inline">Echo</span>
       </button>
 
       <div class="ml-auto flex items-center gap-2 text-sm">
         <!-- Mode -->
         <div class="flex rounded-md border border-zinc-700 p-0.5 text-xs">
-          <button class="inline-flex items-center gap-1 rounded px-2 py-1" :class="state.mode === 'direct' ? 'bg-zinc-700 text-white' : 'text-zinc-400 hover:text-zinc-200'" title="Direct Browser Mode: fetch from your browser. Works with localhost if the API allows CORS." @click="setMode('direct')">
+          <button class="inline-flex items-center gap-1 rounded px-2 py-1" :class="state.mode === 'direct' ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-400 hover:text-zinc-200'" title="Direct Browser Mode: fetch from your browser. Works with localhost if the API allows CORS." @click="setMode('direct')">
             <Monitor :size="13" /> Direct
           </button>
-          <button class="inline-flex items-center gap-1 rounded px-2 py-1" :class="state.mode === 'proxy' ? 'bg-zinc-700 text-white' : 'text-zinc-400 hover:text-zinc-200'" title="Netlify Proxy Mode: bypasses CORS for public APIs. Cannot reach localhost." @click="setMode('proxy')">
+          <button class="inline-flex items-center gap-1 rounded px-2 py-1" :class="state.mode === 'proxy' ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-400 hover:text-zinc-200'" title="Netlify Proxy Mode: bypasses CORS for public APIs. Cannot reach localhost." @click="setMode('proxy')">
             <Zap :size="13" /> Proxy
           </button>
         </div>
@@ -82,6 +131,21 @@ const syncLabel = {
           </select>
           <button class="border-l border-zinc-700 p-1.5 text-zinc-400 hover:text-zinc-100" title="Manage environments" @click="modal = 'env'"><Settings2 :size="14" /></button>
         </div>
+
+        <!-- Theme switch: on = dark -->
+        <button
+          role="switch"
+          :aria-checked="theme === 'dark'"
+          :title="theme === 'dark' ? 'Dark mode on (click for light)' : 'Dark mode off (click for dark)'"
+          class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border border-zinc-700 transition-colors"
+          :class="theme === 'dark' ? 'bg-zinc-800' : 'bg-zinc-900'"
+          @click="setDark(theme !== 'dark')"
+        >
+          <span class="absolute flex h-5 w-5 items-center justify-center rounded-full shadow transition-transform" :class="theme === 'dark' ? 'translate-x-5 bg-orange-500 text-white' : 'translate-x-0.5 bg-white text-amber-500'">
+            <Moon v-if="theme === 'dark'" :size="12" />
+            <Sun v-else :size="12" />
+          </span>
+        </button>
 
         <!-- Account / sync -->
         <template v-if="cloudEnabled">
@@ -104,12 +168,27 @@ const syncLabel = {
       </div>
     </header>
 
-    <div :inert="!!modal" class="flex min-h-0 flex-1" :class="{ invisible: modal }">
-      <Sidebar v-show="sidebarOpen" class="w-72 shrink-0" @import="modal = 'import'" @collection="openCollection" />
+    <div :inert="!!modal" class="flex min-h-0 flex-1" :class="{ invisible: modal, 'select-none': dragging, 'cursor-col-resize': dragging === 'sidebar', 'cursor-row-resize': dragging === 'split' }">
+      <Sidebar v-show="sidebarOpen" class="shrink-0" :style="{ width: sidebarWidth + 'px' }" @import="modal = 'import'" @collection="openCollection" />
+      <div
+        v-show="sidebarOpen"
+        class="relative z-10 -ml-1 w-1 shrink-0 cursor-col-resize transition-colors hover:bg-orange-500/60"
+        :class="{ 'bg-orange-500/60': dragging === 'sidebar' }"
+        title="Drag to resize · double-click to reset"
+        @pointerdown="startDrag('sidebar', $event)"
+        @dblclick="resetPane('sidebar')"
+      ></div>
 
-      <main class="flex min-w-0 flex-1 flex-col">
+      <main ref="mainEl" class="flex min-w-0 flex-1 flex-col">
         <template v-if="activeRequest">
-          <RequestEditor class="min-h-0 flex-1" @show-code="modal = 'code'" />
+          <RequestEditor class="min-h-0" :style="{ flex: `0 0 ${split * 100}%` }" @show-code="modal = 'code'" />
+          <div
+            class="relative z-10 -mb-1 h-1 shrink-0 cursor-row-resize transition-colors hover:bg-orange-500/60"
+            :class="{ 'bg-orange-500/60': dragging === 'split' }"
+            title="Drag to resize · double-click to reset"
+            @pointerdown="startDrag('split', $event)"
+            @dblclick="resetPane('split')"
+          ></div>
           <ResponseViewer class="min-h-0 flex-1" />
         </template>
         <div v-else class="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center text-zinc-500">

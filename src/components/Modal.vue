@@ -13,12 +13,12 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   <Teleport to="body">
     <div
       class="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto p-4 pt-[8vh]"
-      style="background-color: rgb(9 9 11 / 0.9)"
+      style="background-color: color-mix(in srgb, var(--color-zinc-950) 85%, transparent)"
       @mousedown.self="emit('close')"
     >
       <div
         class="flex max-h-[84vh] w-full flex-col rounded-lg border border-zinc-700 shadow-2xl ring-1 shadow-black/60 ring-black/40"
-        style="background-color: #18181b"
+        style="background-color: var(--color-zinc-900)"
         :class="width"
         role="dialog"
         aria-modal="true"

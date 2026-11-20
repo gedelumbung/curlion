@@ -1,7 +1,7 @@
 // Netlify Edge Function: CORS proxy.
-// The browser POSTs to /api/proxy with the target in X-PostLite-* headers and the
+// The browser POSTs to /api/proxy with the target in X-Echo-* headers and the
 // request body as-is. We forward it and return the upstream response, always with
-// HTTP 200; the real status and headers travel in X-PostLite-* response headers
+// HTTP 200; the real status and headers travel in X-Echo-* response headers
 // (so 204/304/1xx and opaque headers survive the hop).
 
 const HOP_BY_HOP = new Set([
@@ -20,7 +20,7 @@ const HOP_BY_HOP = new Set([
 const PRIVATE_HOST = /^(localhost|0\.0\.0\.0|127\.|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.|\[?::1\]?$|\[?f[cd][0-9a-f]{2}:)/i
 
 const fail = (status, message) =>
-  new Response(message, { status, headers: { 'X-PostLite-Error': '1', 'Content-Type': 'text/plain' } })
+  new Response(message, { status, headers: { 'X-Echo-Error': '1', 'Content-Type': 'text/plain' } })
 
 export default async (request) => {
   if (request.method !== 'POST') return fail(405, 'Use POST')
@@ -30,13 +30,13 @@ export default async (request) => {
   const self = new URL(request.url).origin
   if (origin && origin !== self) return fail(403, 'Cross-origin use of the proxy is not allowed')
 
-  const target = request.headers.get('x-postlite-url')
-  const method = (request.headers.get('x-postlite-method') || 'GET').toUpperCase()
+  const target = request.headers.get('x-echo-url')
+  const method = (request.headers.get('x-echo-method') || 'GET').toUpperCase()
   let headers = []
   try {
-    headers = JSON.parse(decodeURIComponent(request.headers.get('x-postlite-headers') || '%5B%5D'))
+    headers = JSON.parse(decodeURIComponent(request.headers.get('x-echo-headers') || '%5B%5D'))
   } catch {
-    return fail(400, 'Invalid X-PostLite-Headers')
+    return fail(400, 'Invalid X-Echo-Headers')
   }
 
   let url
@@ -80,9 +80,9 @@ export default async (request) => {
   upstream.headers.forEach((value, key) => respHeaders.push({ key, value }))
 
   const res = new Headers({
-    'X-PostLite-Status': String(upstream.status),
-    'X-PostLite-Status-Text': upstream.statusText || '',
-    'X-PostLite-Headers': encodeURIComponent(JSON.stringify(respHeaders)),
+    'X-Echo-Status': String(upstream.status),
+    'X-Echo-Status-Text': upstream.statusText || '',
+    'X-Echo-Headers': encodeURIComponent(JSON.stringify(respHeaders)),
     'Cache-Control': 'no-store',
   })
   const ct = upstream.headers.get('content-type')

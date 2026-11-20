@@ -1,4 +1,4 @@
-// Parse a `curl` command into a PostLite request.
+// Parse a `curl` command into a Echo request.
 import { kv, newRequest } from './model.js'
 import { parseQuery } from './url.js'
 
