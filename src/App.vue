@@ -56,7 +56,7 @@ const syncLabel = {
 
   <div v-else class="flex h-screen flex-col bg-zinc-950 text-zinc-200">
     <!-- Top bar -->
-    <header class="flex h-12 shrink-0 items-center gap-3 border-b border-zinc-800 px-3">
+    <header :inert="!!modal" class="flex h-12 shrink-0 items-center gap-3 border-b border-zinc-800 px-3">
       <button class="flex items-center gap-2 font-semibold" title="Toggle sidebar" @click="sidebarOpen = !sidebarOpen">
         <img src="/favicon.svg" class="h-6 w-6" alt="" />
         <span class="hidden sm:inline">PostLite</span>
@@ -104,7 +104,7 @@ const syncLabel = {
       </div>
     </header>
 
-    <div class="flex min-h-0 flex-1">
+    <div :inert="!!modal" class="flex min-h-0 flex-1" :class="{ invisible: modal }">
       <Sidebar v-show="sidebarOpen" class="w-72 shrink-0" @import="modal = 'import'" @collection="openCollection" />
 
       <main class="flex min-w-0 flex-1 flex-col">

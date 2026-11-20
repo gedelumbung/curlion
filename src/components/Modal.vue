@@ -11,8 +11,18 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
 <template>
   <Teleport to="body">
-    <div class="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-black/60 p-4 pt-[8vh]" @mousedown.self="emit('close')">
-      <div class="flex max-h-[84vh] w-full flex-col rounded-lg border border-zinc-700 bg-zinc-900 shadow-2xl" :class="width">
+    <div
+      class="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto p-4 pt-[8vh]"
+      style="background-color: rgb(9 9 11 / 0.9)"
+      @mousedown.self="emit('close')"
+    >
+      <div
+        class="flex max-h-[84vh] w-full flex-col rounded-lg border border-zinc-700 shadow-2xl ring-1 shadow-black/60 ring-black/40"
+        style="background-color: #18181b"
+        :class="width"
+        role="dialog"
+        aria-modal="true"
+      >
         <header class="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
           <h2 class="font-semibold">{{ title }}</h2>
           <button class="rounded p-1 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100" @click="emit('close')"><X :size="18" /></button>
