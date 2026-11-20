@@ -1,6 +1,6 @@
 <script setup>
 import { onBeforeUnmount, onMounted, ref } from 'vue'
-import { Activity, Cloud, CloudOff, Globe2, Info, Loader2, LogOut, Monitor, Moon, Settings2, Sun, Zap } from 'lucide-vue-next'
+import { Activity, Cloud, CloudOff, Globe2, Info, Laptop, Loader2, LogOut, Monitor, Moon, Settings2, Sun, Zap } from 'lucide-vue-next'
 import { setDark, theme } from './lib/theme.js'
 import { vTopLayer } from './lib/topLayer.js'
 import Sidebar from './components/Sidebar.vue'
@@ -13,15 +13,24 @@ import CodeModal from './components/CodeModal.vue'
 import LoginScreen from './components/LoginScreen.vue'
 import CollectionModal from './components/CollectionModal.vue'
 import ActivityDashboard from './components/ActivityDashboard.vue'
-import { activeRequest, addNewRequest, cloudEnabled, init, openTabs, saveNow, send, setActiveEnv, setMode, signOut, state } from './store.js'
+import AgentModal from './components/AgentModal.vue'
+import UnsavedDialog from './components/UnsavedDialog.vue'
+import { activeRequest, addNewRequest, checkAgent, cloudEnabled, init, openTabs, saveNow, send, setActiveEnv, setMode, signOut, state } from './store.js'
 
-const modal = ref(null) // env | import | code | collection | activity
+const modal = ref(null) // env | import | code | collection | activity | agent
 const collectionCtx = ref(null) // { col, tab }
 function openCollection(ctx) {
   collectionCtx.value = ctx
   modal.value = 'collection'
 }
 const sidebarOpen = ref(true)
+
+// Agent button: switch to Agent mode; open the setup when it is already selected or not running
+async function pickAgent() {
+  if (state.mode === 'agent') return (modal.value = 'agent')
+  setMode('agent')
+  if (!(await checkAgent())) modal.value = 'agent'
+}
 
 const signingOut = ref(false)
 async function doSignOut() {
@@ -132,6 +141,19 @@ const syncLabel = {
           <button class="inline-flex items-center gap-1 rounded px-2 py-1" :class="state.mode === 'proxy' ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-400 hover:text-zinc-200'" title="Netlify Proxy Mode: bypasses CORS for public APIs. Cannot reach localhost." @click="setMode('proxy')">
             <Zap :size="13" /> Proxy
           </button>
+          <button
+            class="inline-flex items-center gap-1 rounded px-2 py-1"
+            :class="state.mode === 'agent' ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-400 hover:text-zinc-200'"
+            :title="state.mode === 'agent' ? `Agent mode: ${state.agent.status === 'online' ? 'agent running' : 'agent not running'}. Click for setup.` : 'Agent mode: send from your computer through the Beacon Agent (localhost, local network, no CORS)'"
+            @click="pickAgent"
+          >
+            <Laptop :size="13" /> Agent
+            <span
+              v-if="state.mode === 'agent'"
+              class="h-1.5 w-1.5 rounded-full"
+              :class="state.agent.status === 'online' ? 'bg-emerald-500' : state.agent.status === 'offline' ? 'bg-red-500' : 'bg-zinc-500'"
+            ></span>
+          </button>
         </div>
 
         <!-- Environment switcher -->
@@ -228,6 +250,9 @@ const syncLabel = {
     <ImportModal v-if="modal === 'import'" @close="modal = null" />
     <CodeModal v-if="modal === 'code'" @close="modal = null" />
     <ActivityDashboard v-if="modal === 'activity'" @close="modal = null" />
+    <AgentModal v-if="modal === 'agent'" @close="modal = null" />
+    <!-- keyed so each prompt in a multi-tab close gets a fresh dialog -->
+    <UnsavedDialog v-if="state.unsavedPrompt" :key="state.unsavedPrompt.index + ':' + state.unsavedPrompt.name" />
     <CollectionModal v-if="modal === 'collection'" :collection="collectionCtx.col" :initial-tab="collectionCtx.tab" @close="modal = null" />
 
     <!-- Toasts: top layer, re-shown for each new toast so they sit above any open modal -->

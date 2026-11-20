@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 import { AlertTriangle, Check, Copy, FileDown, Save, WrapText } from 'lucide-vue-next'
 import CodeEditor from './CodeEditor.vue'
 import JsonTree from './JsonTree.vue'
-import { activeError, activeLoading, activeRequest, activeResponse, state, toast } from '../store.js'
+import { activeError, activeLoading, activeRequest, activeResponse, addSampleNow, state, toast } from '../store.js'
 import { kv, newSample } from '../lib/model.js'
 import { copyText, formatSize, statusColor } from '../lib/ui.js'
 
@@ -37,7 +37,7 @@ function saveAsSample() {
     headers: r.headers.filter((h) => /^(content-type|cache-control|location|x-)/i.test(h.key)).map((h) => kv(h.key, h.value)),
     body: pretty.value,
   })
-  activeRequest.value.samples.push(s)
+  addSampleNow(activeRequest.value.id, s)
   toast('Saved as sample. See the "Samples / Mock" tab.', 'success')
 }
 </script>

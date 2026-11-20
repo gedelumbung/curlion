@@ -1,9 +1,10 @@
 <!-- Open request tabs (like Postman): click to switch, middle-click or × to close,
-     drag to reorder, double-click to keep a preview tab, right-click for more. -->
+     drag to reorder, double-click to keep a preview tab, right-click for more.
+     A red dot marks unsaved changes; closing such tabs asks first. -->
 <script setup>
 import { nextTick, ref, watch } from 'vue'
 import { Loader2, Plus, X } from 'lucide-vue-next'
-import { addNewRequest, closeTab, closeTabs, keepTab, moveTab, openRequest, openTabs, state } from '../store.js'
+import { addNewRequest, keepTab, moveTab, openRequest, openTabs, requestCloseTabs, state } from '../store.js'
 import { methodColor } from '../lib/ui.js'
 import { vTopLayer } from '../lib/topLayer.js'
 
@@ -29,18 +30,21 @@ function onWheel(e) {
   if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) strip.value.scrollLeft += e.deltaY
 }
 
+const closeIds = (ids) => requestCloseTabs(ids)
+const idsWhere = (pred) => openTabs.value.filter((_, j) => pred(j)).map((t) => t.tab.requestId)
+
 function onAuxClick(e, t) {
-  if (e.button === 1) closeTab(t.requestId)
+  if (e.button === 1) closeIds([t.requestId])
 }
 
 function openMenu(e, index) {
   menu.value = { x: Math.min(e.clientX, window.innerWidth - 220), y: e.clientY, index }
 }
 const menuItems = [
-  { label: 'Close', run: (i) => closeTabs((_, j) => j === i) },
-  { label: 'Close other tabs', run: (i) => closeTabs((_, j) => j !== i) },
-  { label: 'Close tabs to the right', run: (i) => closeTabs((_, j) => j > i) },
-  { label: 'Close all tabs', run: () => closeTabs(() => true) },
+  { label: 'Close', run: (i) => closeIds(idsWhere((j) => j === i)) },
+  { label: 'Close other tabs', run: (i) => closeIds(idsWhere((j) => j !== i)) },
+  { label: 'Close tabs to the right', run: (i) => closeIds(idsWhere((j) => j > i)) },
+  { label: 'Close all tabs', run: () => closeIds(idsWhere(() => true)) },
 ]
 function runMenu(item) {
   const i = menu.value.index
@@ -63,7 +67,7 @@ function onDrop(i) {
   <div class="flex h-9 shrink-0 items-stretch border-b border-zinc-800 bg-zinc-925">
     <div ref="strip" class="tab-strip flex min-w-0 items-stretch overflow-x-auto" @wheel.passive="onWheel">
       <div
-        v-for="({ tab, col, req }, i) in openTabs"
+        v-for="({ tab, col, req, dirty }, i) in openTabs"
         :key="tab.requestId"
         :data-tab="tab.requestId"
         class="group relative flex max-w-52 min-w-0 shrink-0 cursor-pointer items-center gap-1.5 border-r border-zinc-800 pr-1.5 pl-3 text-xs select-none"
@@ -71,7 +75,7 @@ function onDrop(i) {
           isActive(tab) ? 'bg-zinc-950 text-zinc-100' : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200',
           dropAt === i && dragFrom !== i ? 'ring-1 ring-orange-500 ring-inset' : '',
         ]"
-        :title="`${col.name} / ${req.name}${tab.preview ? ' (preview: double-click to keep open)' : ''}`"
+        :title="`${col.name} / ${req.name}${dirty ? ' (unsaved changes)' : ''}${tab.preview ? ' (preview: double-click to keep open)' : ''}`"
         draggable="true"
         @click="openRequest(tab.collectionId, tab.requestId, { preview: tab.preview })"
         @dblclick="keepTab(tab.requestId)"
@@ -85,6 +89,7 @@ function onDrop(i) {
         @dragend="dragFrom = dropAt = null"
       >
         <span v-if="isActive(tab)" class="absolute inset-x-0 top-0 h-0.5 bg-orange-500"></span>
+        <span v-if="dirty" class="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-red-500" title="Unsaved changes"></span>
         <span class="shrink-0 font-mono text-[10px] font-bold" :class="methodColor[req.method]">{{ SHORT[req.method] || req.method }}</span>
         <span class="truncate" :class="{ italic: tab.preview }">{{ req.name }}</span>
         <Loader2 v-if="state.pending[req.id]" :size="12" class="shrink-0 animate-spin text-zinc-500" />
@@ -92,7 +97,7 @@ function onDrop(i) {
           class="ml-auto shrink-0 rounded p-0.5 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-100"
           :class="isActive(tab) ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'"
           title="Close tab (middle-click)"
-          @click.stop="closeTab(tab.requestId)"
+          @click.stop="closeIds([tab.requestId])"
         >
           <X :size="13" />
         </button>

@@ -53,6 +53,7 @@ netlify dev        # runs Vite + edge functions at /api/proxy and /mock/*
 | Response: colored status, time (ms), size, headers, Pretty/Tree/Raw, Copy | ✅ |
 | Send and Download + automatic binary response detection (`Content-Disposition`, pdf/zip/images) | ✅ |
 | Direct Browser Mode & Netlify Proxy Mode (localhost is blocked by the proxy, with a clear message) | ✅ |
+| **Agent Mode** (like Postman's Desktop Agent): requests go through the Beacon Agent on your computer, so they reach localhost / your local network, skip CORS and can set Cookie/Host/User-Agent | ✅ |
 | Live sidebar search (name/folder/URL), request history | ✅ |
 | Import Postman Collection v2.1 (folders, auth, body, saved responses → samples, variables → environment) | ✅ |
 | Export a collection to Postman v2.1 JSON | ✅ |
@@ -63,7 +64,7 @@ netlify dev        # runs Vite + edge functions at /api/proxy and /mock/*
 | Paste cURL into the URL bar / Import → Raw cURL | ✅ |
 | Code snippets: cURL, fetch, Axios, PHP cURL, Guzzle, Go net/http, Python requests | ✅ |
 | Sample / example responses + mock URL `/mock/<collection_id>/<sample_id>` | ✅ |
-| Supabase Auth (email/password only, accounts created by an admin) + local↔cloud sync (3-second debounce, `Ctrl/⌘+S`) | ✅ |
+| Supabase Auth (email/password only, accounts created by an admin) + local↔cloud sync of saved changes (3-second debounce, `Ctrl/⌘+S`) | ✅ |
 | Secret variables (`is_secret`): masked in the UI, left out of snippets when the mask option is on | ✅ |
 
 ## Phase 4 features (PRD §5)
@@ -82,6 +83,7 @@ Per collection from the sidebar menu (right-click or `⋯`): **Publish docs** an
 
 ## Interface
 
+- **Explicit save** (like Postman): edits to a request stay in its tab as unsaved changes (a red dot on the tab, kept across reloads in this browser) until you press **Save** or `Ctrl/⌘+S`; only saved changes sync to the team and appear in the activity log. Adding, renaming, moving and deleting items, and *Save as Sample*, are saved right away. Closing a tab with unsaved changes asks Save / Don't save / Cancel; when closing several, an **Ignore all** button appears after three prompts.
 - **Multiple tabs** (like Postman): a single click in the sidebar opens a *preview* tab (italic) that the next click replaces; editing, sending or double-clicking keeps it open. Close with × or middle-click, drag to reorder, right-click for Close others / to the right / all. Each tab keeps its own response and can send concurrently. Open tabs are remembered.
 - **Light / dark theme**: toggle switch in the header. The choice is remembered; until you pick one, it follows the system setting.
 - **Resizable panes**: drag the sidebar edge or the divider between request and response. Double-click a divider to reset it. Sizes are remembered per browser.
@@ -121,10 +123,28 @@ supabase/migrations/    SQL schema + RLS (001 base, 002 docs/collaboration, 003 
 tests/                  unit tests (node:test)
 ```
 
+## Beacon Agent (localhost access)
+
+Browsers cannot send requests from a website to your `localhost` without CORS, and the cloud proxy cannot reach your computer at all. The agent is a small zero-dependency Node.js script ([`public/beacon-agent.mjs`](public/beacon-agent.mjs)) that sends requests for Beacon from your machine, like Postman's Desktop Agent.
+
+```bash
+# Node.js 18+; the site serves the script at /beacon-agent.mjs
+curl -fsSLO https://<your-site>/beacon-agent.mjs
+node beacon-agent.mjs --origin https://<your-site>
+# local development: npm run agent   (allows http://localhost:5173)
+```
+
+Then pick **Agent** in the header (the dot is green when the agent is running; click it again for setup). Chrome may ask to let the site access your local network: choose Allow.
+
+- Listens on `127.0.0.1:5577` only (`--port` to change; set the same port in Beacon's Agent setup).
+- Accepts requests only from the `--origin` site(s), checked on every request and CORS preflight; other `Host` headers are rejected (DNS rebinding).
+- Follows redirects, decodes gzip/deflate/br, keeps multipart boundaries, accepts self-signed HTTPS certificates (`--strict-tls` to verify them).
+- Logs each request in the terminal.
+
 ## Notes
 
-- **localhost:** an HTTPS app cannot reach `http://localhost` through the cloud proxy. Use Direct mode and enable CORS on your local server.
-- **Direct mode:** browsers block some headers (`Cookie`, `User-Agent`, `Host`). Use Proxy mode for public APIs that need them.
+- **localhost:** the cloud proxy cannot reach `http://localhost`. Use Agent mode, or Direct mode with CORS enabled on your local server.
+- **Direct mode:** browsers block some headers (`Cookie`, `User-Agent`, `Host`). Use Agent mode (or Proxy mode for public APIs) when you need them.
 - **Form-data files** are kept in memory only (not saved or synced). Pick the file again after a reload.
 - **The proxy** only accepts requests from the site's own origin and rejects private/localhost addresses, so it cannot be used as an open proxy.
 - **Schema:** the `environments` table has an extra `is_global` column (not in the PRD) so Globals are synced too.

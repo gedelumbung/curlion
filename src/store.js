@@ -4,7 +4,7 @@ import { db, getMeta, migrateLegacyDb, setMeta } from './db/index.js'
 import { clone, findNode, newCollection, newEnvironment, newFolder, newRequest, reId, uid } from './lib/model.js'
 import { buildScope, getByPath } from './lib/variables.js'
 import { resolveRequest } from './lib/resolve.js'
-import { sendRequest } from './lib/http.js'
+import { AGENT_DEFAULT_PORT, pingAgent, sendRequest } from './lib/http.js'
 import { collectionToRow, environmentToRow, rowToCollection, rowToEnvironment, supabase } from './lib/supabase.js'
 import { countRequests, diffTrees } from './lib/activity.js'
 import { buildDocsSnapshot } from './lib/publish.js'
@@ -20,9 +20,12 @@ export const state = reactive({
   environments: [],
   envCurrent: {}, // this user's current values: envId -> varId -> value (browser only, never synced)
   activeEnvId: null,
-  mode: 'direct', // direct | proxy
+  mode: 'direct', // direct | proxy | agent
+  agent: { port: AGENT_DEFAULT_PORT, status: 'unknown', version: null }, // Beacon Agent on this computer
   active: null, // { collectionId, requestId }
   tabs: [], // open request tabs: { collectionId, requestId, preview }
+  drafts: {}, // requestId -> working copy edited in its tab; saved into the collection on Save
+  unsavedPrompt: null, // { name, index, total, showIgnoreAll, resolve } for the close-tab dialog
   expanded: {}, // folder/collection id -> bool
   search: '',
   responses: {}, // requestId -> response (kept per request for this session)
@@ -37,6 +40,9 @@ export const state = reactive({
 
 export const cloudEnabled = !!supabase
 
+// dev-only handle for debugging in the browser console
+if (import.meta.env?.DEV && typeof window !== "undefined") window.__beacon = { state }
+
 // ---- Derived ------------------------------------------------------------
 
 export const globalEnv = computed(() => state.environments.find((e) => e.isGlobal))
@@ -44,11 +50,13 @@ export const activeEnv = computed(() => state.environments.find((e) => e.id === 
 export const scope = computed(() => buildScope(globalEnv.value, activeEnv.value, state.envCurrent))
 
 export const activeCollection = computed(() => state.collections.find((c) => c.id === state.active?.collectionId) || null)
+/** The request shown in the editor: its unsaved working copy (draft), else the saved node. */
 export const activeRequest = computed(() => {
   const col = activeCollection.value
   if (!col) return null
   const hit = findNode(col.items, state.active.requestId)
-  return hit?.node.type === 'request' ? hit.node : null
+  if (hit?.node.type !== 'request') return null
+  return state.drafts[hit.node.id] || hit.node
 })
 export const activeResponse = computed(() => (activeRequest.value ? state.responses[activeRequest.value.id] || null : null))
 export const activeLoading = computed(() => !!(activeRequest.value && state.pending[activeRequest.value.id]))
@@ -59,9 +67,12 @@ export const openTabs = computed(() =>
   state.tabs.flatMap((tab) => {
     const col = state.collections.find((c) => c.id === tab.collectionId)
     const hit = col && findNode(col.items, tab.requestId)
-    return hit?.node.type === 'request' ? [{ tab, col, req: hit.node }] : []
+    if (hit?.node.type !== 'request') return []
+    const draft = state.drafts[hit.node.id]
+    return [{ tab, col, req: draft || hit.node, dirty: !!draft && json(draft) !== json(hit.node) }]
   }),
 )
+export const isDirty = (requestId) => openTabs.value.some((t) => t.tab.requestId === requestId && t.dirty)
 
 /**
  * Team workspace: every signed-in user can see and edit every collection.
@@ -129,8 +140,12 @@ export function touchEnvironment(env) {
 }
 
 /** Ctrl+S: write everything now and sync immediately. */
+/** Ctrl/⌘+S and the Save button: save the active request's edits, then store and sync everything. */
 export async function saveNow() {
+  if (state.active) saveRequest(state.active.requestId)
+  const draftsTimer = timers.has('save:drafts')
   await flushTimers('save:')
+  if (draftsTimer) persistDrafts() // re-arm: flushTimers only cancels
   await db.transaction('rw', db.collections, db.environments, async () => {
     await db.collections.bulkPut(state.collections.map(plain))
     await db.environments.bulkPut(state.environments.map(plain))
@@ -172,6 +187,8 @@ export async function init() {
   state.activeEnvId = activeEnvId
   state.mode = mode
   state.expanded = expanded || {}
+  state.agent.port = Number(await getMeta('agentPort', AGENT_DEFAULT_PORT)) || AGENT_DEFAULT_PORT
+  if (mode === 'agent') watchAgent()
 
   await moveSecretsToCurrentValues()
 
@@ -188,6 +205,14 @@ export async function init() {
     state.tabs.push({ ...state.active, preview: false })
   }
   saveTabs()
+  // restore unsaved edits, then give every open tab its working copy
+  const savedDrafts = (await getMeta('drafts', {})) || {}
+  for (const t of state.tabs) {
+    const found = findRequest(t.requestId, t.collectionId)
+    if (!found) continue
+    draftBase.set(t.requestId, json(found.node))
+    state.drafts[t.requestId] = savedDrafts[t.requestId] || clone(toRaw(found.node))
+  }
 
   if (supabase) {
     // With Supabase configured the app is sign-in only: resolve the session before showing anything.
@@ -208,11 +233,156 @@ export function setActiveEnv(id) {
 export function setMode(mode) {
   state.mode = mode
   setMeta('mode', mode)
+  if (mode === 'agent') watchAgent()
+}
+
+// ---- Beacon Agent ---------------------------------------------------------
+// Polled while Agent mode is selected so the header can show whether it is running.
+
+let agentTimer = null
+export async function checkAgent() {
+  const r = await pingAgent(state.agent.port)
+  state.agent.status = r.ok ? 'online' : 'offline'
+  state.agent.version = r.ok ? r.version : null
+  return r.ok
+}
+function watchAgent() {
+  checkAgent()
+  clearInterval(agentTimer)
+  agentTimer = setInterval(() => (state.mode === 'agent' ? checkAgent() : clearInterval(agentTimer)), 10_000)
+}
+export function setAgentPort(port) {
+  state.agent.port = Number(port) || AGENT_DEFAULT_PORT
+  setMeta('agentPort', state.agent.port)
+  checkAgent()
+}
+/** Open a collection/folder in the sidebar and remember it across reloads. */
+function expand(id) {
+  if (state.expanded[id]) return
+  state.expanded[id] = true
+  setMeta('expanded', { ...state.expanded })
 }
 export function toggleExpanded(id, value) {
   state.expanded[id] = value ?? !state.expanded[id]
   setMeta('expanded', { ...state.expanded })
 }
+// ---- Drafts (unsaved request edits) ----------------------------------------
+// Each open tab edits a working copy of its request. Edits stay local (and survive a
+// reload) until the user saves; only then do they reach the collection, the cloud and
+// the activity log. Structural changes (add/rename/move/delete) still apply right away.
+
+// read through the reactive proxy (not toRaw) so computed values such as `dirty` track edits
+const json = (o) => JSON.stringify(o)
+const draftBase = new Map() // requestId -> JSON of the saved request the draft started from
+
+function findRequest(requestId, collectionId) {
+  const cols = collectionId ? state.collections.filter((c) => c.id === collectionId) : state.collections
+  for (const col of cols) {
+    const hit = findNode(col.items, requestId)
+    if (hit?.node.type === 'request') return { col, node: hit.node }
+  }
+  return null
+}
+
+function ensureDraft(requestId, collectionId) {
+  if (state.drafts[requestId]) return
+  const found = findRequest(requestId, collectionId)
+  if (!found) return
+  state.drafts[requestId] = clone(toRaw(found.node))
+  draftBase.set(requestId, json(found.node))
+}
+
+/** Keep unsaved drafts in IndexedDB so they survive a reload (debounced). */
+export function persistDrafts() {
+  debounce('save:drafts', SAVE_DELAY, () => {
+    const dirty = {}
+    for (const t of openTabs.value) if (t.dirty) dirty[t.tab.requestId] = plain(state.drafts[t.tab.requestId])
+    setMeta('drafts', dirty)
+  })
+}
+
+/** Save a tab's draft into its collection (then it is stored, synced and logged). */
+export function saveRequest(requestId = state.active?.requestId) {
+  const draft = state.drafts[requestId]
+  const found = draft && findRequest(requestId)
+  if (!found) return false
+  const copy = clone(toRaw(draft))
+  for (const k of Object.keys(found.node)) if (!(k in copy)) delete found.node[k]
+  Object.assign(found.node, copy)
+  draftBase.set(requestId, json(found.node))
+  touchCollection(found.col)
+  keepTab(requestId)
+  persistDrafts()
+  return true
+}
+
+/** "Save as Sample" from a response: saved right away, without saving other draft edits. */
+export function addSampleNow(requestId, sample) {
+  const found = findRequest(requestId)
+  if (!found) return
+  const draft = state.drafts[requestId]
+  const wasClean = draft && json(draft) === json(found.node)
+  found.node.samples.push(clone(sample))
+  if (draft) {
+    draft.samples.push(clone(sample))
+    if (wasClean) draftBase.set(requestId, json(found.node))
+  }
+  touchCollection(found.col)
+  persistDrafts()
+}
+
+/** Throw away a tab's unsaved edits. */
+function discardDraft(requestId) {
+  delete state.drafts[requestId]
+  draftBase.delete(requestId)
+}
+
+/** After sync brought newer versions, refresh drafts the user has not edited. */
+function refreshCleanDrafts() {
+  for (const id of Object.keys(state.drafts)) {
+    const found = findRequest(id)
+    if (!found) continue
+    const saved = json(found.node)
+    if (json(state.drafts[id]) === draftBase.get(id) && saved !== draftBase.get(id)) {
+      state.drafts[id] = clone(toRaw(found.node))
+      draftBase.set(id, saved)
+    }
+  }
+}
+
+/** Ask what to do with unsaved changes (rendered by UnsavedDialog.vue). */
+function askUnsaved(prompt) {
+  return new Promise((resolve) => (state.unsavedPrompt = { ...prompt, resolve }))
+}
+export function answerUnsaved(choice) {
+  const p = state.unsavedPrompt
+  state.unsavedPrompt = null
+  p?.resolve(choice)
+}
+
+const IGNORE_ALL_AFTER = 3 // warnings shown one by one before "Ignore all" is offered
+
+/**
+ * Close tabs the way the user asked (× button, middle-click, tab menu): unsaved tabs
+ * are confirmed one by one; after IGNORE_ALL_AFTER warnings an "Ignore all" button
+ * discards the rest. Cancel keeps every tab open. Returns false when cancelled.
+ */
+export async function requestCloseTabs(requestIds) {
+  const dirty = requestIds.filter(isDirty)
+  const save = []
+  for (let i = 0; i < dirty.length; i++) {
+    const id = dirty[i]
+    const tab = openTabs.value.find((t) => t.tab.requestId === id)
+    const choice = await askUnsaved({ name: tab?.req.name || 'this request', index: i + 1, total: dirty.length, showIgnoreAll: i >= IGNORE_ALL_AFTER })
+    if (choice === 'cancel') return false
+    if (choice === 'ignoreAll') break
+    if (choice === 'save') save.push(id)
+  }
+  for (const id of save) saveRequest(id)
+  closeTabs((t) => requestIds.includes(t.requestId))
+  return true
+}
+
 // ---- Tabs ---------------------------------------------------------------
 // Like Postman: a single click in the sidebar opens a *preview* tab (italic) that the
 // next single click replaces. Editing, sending or double-clicking the tab keeps it.
@@ -240,6 +410,7 @@ export function openRequest(collectionId, requestId, { preview = false } = {}) {
       state.tabs.splice(activeIdx === -1 ? state.tabs.length : activeIdx + 1, 0, tab)
     }
   }
+  ensureDraft(requestId, collectionId)
   state.active = { collectionId, requestId }
   saveTabs()
 }
@@ -258,7 +429,11 @@ export function closeTabs(pred) {
   const activeIdx = state.tabs.findIndex((t) => t.requestId === state.active?.requestId)
   const activeClosed = activeIdx !== -1 && pred(state.tabs[activeIdx], activeIdx)
   const kept = state.tabs.filter((t, i) => !pred(t, i))
-  for (const t of state.tabs) if (!kept.includes(t) && state.pending[t.requestId]) cancel(t.requestId)
+  for (const t of state.tabs) {
+    if (kept.includes(t)) continue
+    if (state.pending[t.requestId]) cancel(t.requestId)
+    discardDraft(t.requestId) // unsaved edits of closed tabs are dropped (callers save first)
+  }
   if (activeClosed || !state.active) {
     // nearest surviving tab to the right of the old position, else to the left
     const after = state.tabs.slice(activeIdx + 1).find((t) => kept.includes(t))
@@ -268,8 +443,8 @@ export function closeTabs(pred) {
   }
   state.tabs = kept
   saveTabs()
+  persistDrafts()
 }
-export const closeTab = (requestId) => closeTabs((t) => t.requestId === requestId)
 
 // Requests can also disappear through sync (deleted on another device): drop their tabs.
 watch(openTabs, (list) => {
@@ -288,14 +463,14 @@ export function moveTab(from, to) {
 export function createCollection(name = 'New Collection') {
   const col = newCollection(name)
   state.collections.push(col)
-  state.expanded[col.id] = true
+  expand(col.id)
   persistCollection(col)
   return col
 }
 
 export function addCollection(col) {
   state.collections.push(col)
-  state.expanded[col.id] = true
+  expand(col.id)
   persistCollection(col)
   return col
 }
@@ -324,8 +499,8 @@ function containerItems(col, parentId) {
 export function addFolder(col, parentId, name = 'New Folder') {
   const f = newFolder(name)
   containerItems(col, parentId).push(f)
-  state.expanded[parentId || col.id] = true
-  state.expanded[f.id] = true
+  expand(parentId || col.id)
+  expand(f.id)
   touchCollection(col)
   return f
 }
@@ -339,7 +514,7 @@ export function addNewRequest() {
 
 export function addRequest(col, parentId, req = newRequest()) {
   containerItems(col, parentId).push(req)
-  state.expanded[parentId || col.id] = true
+  expand(parentId || col.id)
   touchCollection(col)
   openRequest(col.id, req.id)
   return req
@@ -351,7 +526,15 @@ export function renameNode(col, id, name) {
     col.name = name
   } else {
     const hit = findNode(col.items, id)
-    if (hit) hit.node.name = name
+    if (hit) {
+      const draft = state.drafts[id]
+      const wasClean = draft && json(draft) === json(hit.node)
+      hit.node.name = name
+      if (draft) {
+        draft.name = name // keep the tab title in step
+        if (wasClean) draftBase.set(id, json(hit.node))
+      }
+    }
   }
   touchCollection(col)
 }
@@ -499,9 +682,10 @@ export async function send({ download = false } = {}) {
   const resolved = resolveRequest(req, scope.value)
   try {
     if (state.mode === 'proxy' && /^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])/i.test(resolved.url)) {
-      throw new Error('localhost cannot be reached through the cloud proxy. Switch to Direct mode and enable CORS on your local server.')
+      throw new Error('localhost cannot be reached through the cloud proxy. Use Agent mode (runs requests from your computer), or Direct mode with CORS enabled on your local server.')
     }
-    const res = await sendRequest(resolved, { mode: state.mode, download, signal: controller.signal })
+    const res = await sendRequest(resolved, { mode: state.mode, agentPort: state.agent.port, download, signal: controller.signal })
+    if (state.mode === 'agent') state.agent.status = 'online'
     res.at = Date.now()
     res.extracted = runExtract(req, res)
     state.responses[id] = res
@@ -600,7 +784,8 @@ async function clearLocalData() {
   await db.transaction('rw', db.collections, db.environments, db.history, db.tombstones, async () => {
     await Promise.all([db.collections.clear(), db.environments.clear(), db.history.clear(), db.tombstones.clear()])
   })
-  await Promise.all(['tabs', 'active', 'activeEnvId', 'lastUserId', 'envCurrent'].map((k) => db.meta.delete(k)))
+  await Promise.all(['tabs', 'active', 'activeEnvId', 'lastUserId', 'envCurrent', 'drafts'].map((k) => db.meta.delete(k)))
+  draftBase.clear()
   activityBase.clear()
   pendingLogs.clear()
   const globals = newEnvironment('Globals', true)
@@ -609,6 +794,8 @@ async function clearLocalData() {
     collections: [],
     environments: [globals],
     envCurrent: {},
+    drafts: {},
+    unsavedPrompt: null,
     history: [],
     tabs: [],
     active: null,
@@ -731,6 +918,7 @@ export async function syncAll() {
       await db.environments.delete(localGlobal.id)
     }
     await mergeList(state.environments, remoteEnvs, 'environments', pushEnvironment)
+    refreshCleanDrafts()
     syncOk()
   } catch (err) {
     syncFail(err)
@@ -792,6 +980,8 @@ export async function signOut() {
       console.warn('Final sync before sign-out failed', err)
     }
   }
+  const unsaved = openTabs.value.filter((t) => t.dirty).length
+  if (unsaved && !confirm(`${unsaved} request(s) have unsaved changes. Sign out and discard them?`)) return
   if (state.sync.status === 'error' && !confirm(`Some changes could not be synced (${state.sync.message}). Sign out anyway? They will be lost.`)) return
   await logEvent('SIGN_OUT')
   // 'local' drops this device's session even when offline (the refresh token is still revoked server-side)

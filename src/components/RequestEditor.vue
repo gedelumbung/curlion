@@ -1,11 +1,11 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
-import { ChevronDown, Code2, Download, Loader2, Plus, Send, Trash2, Wand2 } from 'lucide-vue-next'
+import { ChevronDown, Code2, Download, Loader2, Plus, Save, Send, Trash2, Wand2 } from 'lucide-vue-next'
 import VarInput from './VarInput.vue'
 import KeyValueEditor from './KeyValueEditor.vue'
 import CodeEditor from './CodeEditor.vue'
 import SamplesPanel from './SamplesPanel.vue'
-import { activeCollection, activeLoading, activeRequest, activeResponse, cancel, canEdit, keepTab, send, state, toast, touchCollection } from '../store.js'
+import { activeLoading, activeRequest, activeResponse, cancel, isDirty, keepTab, persistDrafts, saveNow, send, state, toast } from '../store.js'
 import { METHODS, uid } from '../lib/model.js'
 import { paramsFromUrl, urlFromParams } from '../lib/url.js'
 import { looksLikeCurl, parseCurl } from '../lib/curl.js'
@@ -17,17 +17,18 @@ const req = activeRequest
 const tab = ref('params')
 const sendMenu = ref(false)
 
-// Auto-save: any edit inside the active request marks its collection dirty.
+// Edits go into the tab's draft (unsaved until Save / Ctrl+S); the draft is kept locally.
 watch(
   req,
   (n, o) => {
     if (n && n === o) {
-      touchCollection(state.active.collectionId)
       keepTab(n.id) // editing a preview tab keeps it open
+      persistDrafts()
     }
   },
   { deep: true },
 )
+const dirty = computed(() => !!req.value && isDirty(req.value.id))
 
 // ---- URL <-> Params two-way sync -----------------------------------------
 function onUrlInput(val) {
@@ -118,21 +119,26 @@ const tabs = [
   { id: 'samples', label: 'Samples / Mock' },
   { id: 'docs', label: 'Docs' },
 ]
-const readOnly = computed(() => !canEdit(activeCollection.value))
 
 defineExpose({ applyCurl })
 </script>
 
 <template>
   <section v-if="req" class="flex min-h-0 flex-col">
-    <p v-if="readOnly" class="mx-4 mt-3 rounded border border-sky-900 bg-sky-950/40 px-3 py-1.5 text-xs text-sky-300">
-      You are a viewer of this shared collection. You can send requests, but changes are not saved to the cloud.
-    </p>
     <!-- Name -->
     <div class="flex items-center gap-2 px-4 pt-3">
       <input v-model="req.name" class="min-w-0 flex-1 truncate bg-transparent text-sm font-medium text-zinc-200 outline-none hover:text-white focus:text-zinc-100" />
       <button class="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100" title="Generate code snippet" @click="emit('show-code')">
         <Code2 :size="15" /> Code
+      </button>
+      <button
+        class="inline-flex items-center gap-1 rounded px-2 py-1 text-xs"
+        :class="dirty ? 'bg-zinc-800 text-zinc-100 hover:bg-zinc-700' : 'cursor-default text-zinc-600'"
+        :disabled="!dirty"
+        :title="dirty ? 'Save changes (Ctrl/⌘+S)' : 'No unsaved changes'"
+        @click="saveNow"
+      >
+        <Save :size="14" /> {{ dirty ? 'Save' : 'Saved' }}
       </button>
     </div>
 
