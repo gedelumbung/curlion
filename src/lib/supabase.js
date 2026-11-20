@@ -43,6 +43,7 @@ export const environmentToRow = (e, ownerId) => ({
 
 export const rowToEnvironment = (r) => ({
   id: r.id,
+  ownerId: r.owner_id,
   name: r.name,
   isGlobal: r.is_global,
   variables: r.variables || [],

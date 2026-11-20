@@ -232,3 +232,19 @@ test('docs snippets keep {{vars}} and dynamic vars unresolved', () => {
   const out = resolveRequest(r, new Map(), { keepDynamic: true })
   assert.equal(out.url, '{{baseUrl}}/a?id={{$uuid}}')
 })
+
+test('buildScope: per-user current values override shared initial values', () => {
+  const env = { id: 'e1', name: 'Dev', variables: [
+    { id: 'v1', key: 'baseUrl', value: 'https://shared.test', enabled: true },
+    { id: 'v2', key: 'token', value: '', enabled: true, isSecret: true },
+    { id: 'v3', key: 'region', value: 'eu', enabled: true },
+  ] }
+  const current = { e1: { v2: 'my-token', v3: '' } }
+  const s = buildScope(null, env, current)
+  assert.equal(s.get('baseUrl').value, 'https://shared.test')
+  assert.equal(s.get('baseUrl').isCurrent, false)
+  assert.equal(s.get('token').value, 'my-token')
+  assert.equal(s.get('token').isCurrent, true)
+  assert.equal(s.get('region').value, 'eu', 'empty current value falls back to the initial value')
+  assert.equal(interpolate('{{baseUrl}}/me?t={{token}}', s), 'https://shared.test/me?t=my-token')
+})

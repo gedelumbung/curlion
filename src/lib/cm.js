@@ -20,7 +20,7 @@ export function variableHighlighter(getScope) {
     const v = getScope().get(name)
     if (!v) return Decoration.mark({ class: 'cm-var cm-var-missing', attributes: { title: `${name} is not defined in the active environment or Globals` } })
     const shown = v.isSecret ? '••••••' : v.value === '' ? '(empty)' : v.value
-    return Decoration.mark({ class: 'cm-var cm-var-ok', attributes: { title: `${name} = ${shown}   [${v.source}]` } })
+    return Decoration.mark({ class: 'cm-var cm-var-ok', attributes: { title: `${name} = ${shown}   [${v.source}${v.isCurrent ? ', your current value' : ''}]` } })
   }
 
   const matcher = new MatchDecorator({

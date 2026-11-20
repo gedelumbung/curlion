@@ -1,8 +1,8 @@
 <script setup>
 import { ref, watch } from 'vue'
-import { Eye, EyeOff, Globe, Lock, Plus, Trash2, Unlock } from 'lucide-vue-next'
+import { Eye, EyeOff, Globe, Lock, Plus, RotateCcw, Trash2, Unlock, Users } from 'lucide-vue-next'
 import Modal from './Modal.vue'
-import { createEnvironment, deleteEnvironment, setActiveEnv, state, touchEnvironment } from '../store.js'
+import { canDeleteEnv, cloudEnabled, createEnvironment, deleteEnvironment, setActiveEnv, setCurrentValue, state, touchEnvironment } from '../store.js'
 import { uid } from '../lib/model.js'
 import { DYNAMIC_DESCRIPTIONS } from '../lib/variables.js'
 
@@ -17,6 +17,10 @@ watch(
 )
 
 const changed = () => touchEnvironment(env.value)
+const current = (v) => state.envCurrent[env.value.id]?.[v.id] ?? ''
+const setCurrent = (v, value) => setCurrentValue(env.value.id, v.id, value)
+const byOthers = (e) => !!(e.ownerId && state.user && e.ownerId !== state.user.id)
+const shared = () => cloudEnabled && !env.value.isGlobal
 
 function add() {
   const e = createEnvironment('New Environment')
@@ -27,7 +31,8 @@ function addVar() {
   changed()
 }
 function removeVar(i) {
-  env.value.variables.splice(i, 1)
+  const [v] = env.value.variables.splice(i, 1)
+  setCurrentValue(env.value.id, v.id, '')
   changed()
 }
 function remove() {
@@ -50,6 +55,7 @@ function remove() {
         >
           <Globe v-if="e.isGlobal" :size="14" class="text-sky-400" />
           <span class="truncate">{{ e.name }}</span>
+          <Users v-if="byOthers(e)" :size="12" class="shrink-0 text-sky-400" title="Created by another team member" />
           <span v-if="e.id === state.activeEnvId" class="ml-auto h-2 w-2 rounded-full bg-emerald-500" title="Active"></span>
         </button>
         <button class="inline-flex items-center gap-1 rounded px-2 py-1.5 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100" @click="add"><Plus :size="14" /> New environment</button>
@@ -61,17 +67,24 @@ function remove() {
           <template v-if="!env.isGlobal">
             <button v-if="state.activeEnvId !== env.id" class="rounded bg-zinc-800 px-3 py-1.5 text-xs hover:bg-zinc-700" @click="setActiveEnv(env.id)">Set active</button>
             <span v-else class="px-2 text-xs text-emerald-400">Active</span>
-            <button class="rounded p-1.5 text-zinc-500 hover:bg-zinc-800 hover:text-red-400" title="Delete" @click="remove"><Trash2 :size="15" /></button>
+            <button v-if="canDeleteEnv(env)" class="rounded p-1.5 text-zinc-500 hover:bg-zinc-800 hover:text-red-400" title="Delete for everyone" @click="remove"><Trash2 :size="15" /></button>
           </template>
         </div>
-        <p v-if="env.isGlobal" class="mb-3 text-xs text-zinc-500">Globals are available in every environment. Active environment values override globals with the same name.</p>
+        <p v-if="env.isGlobal" class="mb-3 text-xs text-zinc-500">
+          Globals are available in every environment and are private to you. Active environment values override globals with the same name.
+        </p>
+        <p v-else-if="cloudEnabled" class="mb-3 text-xs text-zinc-500">
+          This environment is shared with your team. <b class="text-zinc-400">Initial values</b> are synced for everyone.
+          <b class="text-zinc-400">Current values</b> stay in this browser and win when set: tokens from Post-Response extraction go there, so never put personal secrets in initial values.
+        </p>
 
         <table class="w-full table-fixed">
           <thead>
             <tr class="text-left text-xs text-zinc-500">
               <th class="w-8"></th>
               <th class="px-2 py-1 font-medium">Variable</th>
-              <th class="px-2 py-1 font-medium">Value</th>
+              <th class="px-2 py-1 font-medium">{{ shared() ? 'Initial value (shared)' : 'Value' }}</th>
+              <th class="px-2 py-1 font-medium">Current value <span class="font-normal text-zinc-600">(only you)</span></th>
               <th class="w-20"></th>
             </tr>
           </thead>
@@ -89,6 +102,20 @@ function remove() {
                   @input="changed"
                 />
               </td>
+              <td class="px-2 py-1">
+                <div class="flex items-center gap-1">
+                  <input
+                    :value="current(v)"
+                    :type="v.isSecret && !revealed[v.id] ? 'password' : 'text'"
+                    :placeholder="v.value && !v.isSecret ? v.value : 'same as initial'"
+                    class="w-full bg-transparent font-mono text-[13px] outline-none placeholder:text-zinc-600"
+                    :class="{ 'text-emerald-300': current(v) }"
+                    autocomplete="off"
+                    @input="setCurrent(v, $event.target.value)"
+                  />
+                  <button v-if="current(v)" class="shrink-0 rounded p-0.5 text-zinc-500 hover:text-zinc-200" title="Reset to the initial value" @click="setCurrent(v, '')"><RotateCcw :size="12" /></button>
+                </div>
+              </td>
               <td class="pr-1 text-right whitespace-nowrap">
                 <button v-if="v.isSecret" class="rounded p-1 text-zinc-500 hover:text-zinc-200" :title="revealed[v.id] ? 'Hide' : 'Show'" @click="revealed[v.id] = !revealed[v.id]">
                   <EyeOff v-if="revealed[v.id]" :size="14" /><Eye v-else :size="14" />
@@ -96,7 +123,7 @@ function remove() {
                 <button
                   class="rounded p-1"
                   :class="v.isSecret ? 'text-amber-400' : 'text-zinc-600 hover:text-zinc-300'"
-                  :title="v.isSecret ? 'Secret: masked and excluded from exports/public docs. Click to unmark.' : 'Mark as secret'"
+                  :title="v.isSecret ? 'Secret: masked and excluded from snippets/docs. Click to unmark.' : 'Mark as secret'"
                   @click="(v.isSecret = !v.isSecret), changed()"
                 >
                   <Lock v-if="v.isSecret" :size="14" /><Unlock v-else :size="14" />

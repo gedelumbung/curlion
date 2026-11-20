@@ -32,6 +32,7 @@ netlify dev        # runs Vite + edge functions at /api/proxy and /mock/*
    - [`004_require_login.sql`](supabase/migrations/004_require_login.sql): removes all anonymous access; docs are readable by signed-in users only
    - [`005_admin_created_accounts.sql`](supabase/migrations/005_admin_created_accounts.sql): invite error message for admin-created accounts
    - [`006_team_workspace.sql`](supabase/migrations/006_team_workspace.sql): every signed-in user sees and edits every collection; activity history survives collection deletion and includes sign-in/out
+   - [`007_shared_environments.sql`](supabase/migrations/007_shared_environments.sql): environments (except Globals) shared with everyone; blanks existing secret values on the server
 2. Copy `.env.example` to `.env` and fill in `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.
 3. In Supabase → Authentication → URL Configuration, set the Site URL to your site and add `https://<your-site>/**` (and `http://localhost:5173/**` for development) to Redirect URLs, so sign-in returns to the page it started from (e.g. a docs link).
 4. Lock down sign-in (accounts are created by an administrator; there is no sign-up or OAuth):
@@ -56,8 +57,9 @@ netlify dev        # runs Vite + edge functions at /api/proxy and /mock/*
 | Import Postman Collection v2.1 (folders, auth, body, saved responses → samples, variables → environment) | ✅ |
 | Export a collection to Postman v2.1 JSON | ✅ |
 | Environments + Globals, switcher, `{{var}}` green/red highlighting + value on hover, `{{` autocomplete | ✅ |
+| **Shared environments** (like Postman): initial values are shared with the team; each user's current values (e.g. extracted tokens) stay in their browser and are never synced. Globals stay private | ✅ |
 | Dynamic vars: `$uuid`, `$guid`, `$timestamp`, `$isoTimestamp`, `$randomInt`, `$randomEmail` | ✅ |
-| Post-Response Extract (JSON path → environment variable), token chaining | ✅ |
+| Post-Response Extract (JSON path → your current value of an environment variable), token chaining | ✅ |
 | Paste cURL into the URL bar / Import → Raw cURL | ✅ |
 | Code snippets: cURL, fetch, Axios, PHP cURL, Guzzle, Go net/http, Python requests | ✅ |
 | Sample / example responses + mock URL `/mock/<collection_id>/<sample_id>` | ✅ |
@@ -83,7 +85,6 @@ Per collection from the sidebar menu (right-click or `⋯`): **Publish docs** an
 - **Multiple tabs** (like Postman): a single click in the sidebar opens a *preview* tab (italic) that the next click replaces; editing, sending or double-clicking keeps it open. Close with × or middle-click, drag to reorder, right-click for Close others / to the right / all. Each tab keeps its own response and can send concurrently. Open tabs are remembered.
 - **Light / dark theme**: toggle switch in the header. The choice is remembered; until you pick one, it follows the system setting.
 - **Resizable panes**: drag the sidebar edge or the divider between request and response. Double-click a divider to reset it. Sizes are remembered per browser.
-- **"Getting Started" sample**: seeded on first run.
 
 ### How it works and design decisions
 
@@ -116,7 +117,7 @@ src/
 netlify/edge-functions/
   proxy.js              CORS proxy (POST /api/proxy, target in X-Beacon-* headers)
   mock.js               mock endpoint (reads with the service role key)
-supabase/migrations/    SQL schema + RLS (001 base, 002 docs/collaboration, 003 grants, 004 sign-in only, 005 invite message, 006 team workspace)
+supabase/migrations/    SQL schema + RLS (001 base, 002 docs/collaboration, 003 grants, 004 sign-in only, 005 invite message, 006 team workspace, 007 shared environments)
 tests/                  unit tests (node:test)
 ```
 

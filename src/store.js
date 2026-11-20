@@ -1,7 +1,7 @@
 // Global app store: state, persistence (IndexedDB) and cloud sync (Supabase).
 import { computed, reactive, toRaw, watch } from 'vue'
 import { db, getMeta, migrateLegacyDb, setMeta } from './db/index.js'
-import { clone, findNode, kv, newCollection, newEnvironment, newFolder, newRequest, reId, uid } from './lib/model.js'
+import { clone, findNode, newCollection, newEnvironment, newFolder, newRequest, reId, uid } from './lib/model.js'
 import { buildScope, getByPath } from './lib/variables.js'
 import { resolveRequest } from './lib/resolve.js'
 import { sendRequest } from './lib/http.js'
@@ -18,6 +18,7 @@ export const state = reactive({
   ready: false,
   collections: [],
   environments: [],
+  envCurrent: {}, // this user's current values: envId -> varId -> value (browser only, never synced)
   activeEnvId: null,
   mode: 'direct', // direct | proxy
   active: null, // { collectionId, requestId }
@@ -40,7 +41,7 @@ export const cloudEnabled = !!supabase
 
 export const globalEnv = computed(() => state.environments.find((e) => e.isGlobal))
 export const activeEnv = computed(() => state.environments.find((e) => e.id === state.activeEnvId && !e.isGlobal) || null)
-export const scope = computed(() => buildScope(globalEnv.value, activeEnv.value))
+export const scope = computed(() => buildScope(globalEnv.value, activeEnv.value, state.envCurrent))
 
 export const activeCollection = computed(() => state.collections.find((c) => c.id === state.active?.collectionId) || null)
 export const activeRequest = computed(() => {
@@ -134,6 +135,7 @@ export async function saveNow() {
     await db.collections.bulkPut(state.collections.map(plain))
     await db.environments.bulkPut(state.environments.map(plain))
   })
+  await setMeta('envCurrent', clone(toRaw(state.envCurrent)))
   if (state.user) {
     await flushTimers('sync:')
     await syncAll()
@@ -162,6 +164,7 @@ export async function init() {
     getMeta('expanded', {}),
   ])
   const savedTabs = await getMeta('tabs', [])
+  state.envCurrent = (await getMeta('envCurrent', {})) || {}
   cols.sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''))
   state.collections = cols
   state.environments = envs
@@ -170,15 +173,12 @@ export async function init() {
   state.mode = mode
   state.expanded = expanded || {}
 
+  await moveSecretsToCurrentValues()
+
   if (!state.environments.some((e) => e.isGlobal)) {
     const g = newEnvironment('Globals', true)
     state.environments.unshift(g)
     await db.environments.put(plain(g))
-  }
-
-  if (!cols.length && !(await getMeta('seeded'))) {
-    await seedGettingStarted()
-    await setMeta('seeded', true)
   }
 
   const exists = (t) => t && findNode(state.collections.find((c) => c.id === t.collectionId)?.items || [], t.requestId)
@@ -197,61 +197,6 @@ export async function init() {
   }
   state.authReady = true
   state.ready = true
-}
-
-async function seedGettingStarted() {
-  // reuse an existing Development env that points at dummyjson, otherwise create one
-  let dev = state.environments.find((e) => !e.isGlobal && e.variables.some((v) => v.key === 'baseUrl' && v.value === 'https://dummyjson.com'))
-  const newEnv = !dev
-  if (newEnv) {
-    dev = newEnvironment('Development')
-    dev.variables = [
-      { id: uid(), key: 'baseUrl', value: 'https://dummyjson.com', enabled: true, isSecret: false },
-      { id: uid(), key: 'token', value: '', enabled: true, isSecret: true },
-    ]
-  } else if (!dev.variables.some((v) => v.key === 'token')) {
-    dev.variables.push({ id: uid(), key: 'token', value: '', enabled: true, isSecret: true })
-    dev.updatedAt = new Date().toISOString()
-  }
-
-  const col = newCollection('Getting Started')
-  col.description = 'Example requests. Run "Login" first: its Extract rule saves the token into {{token}}.'
-  const auth = newFolder('Auth flow')
-  const login = newRequest('Login', {
-    method: 'POST',
-    url: '{{baseUrl}}/auth/login',
-    headers: [],
-    extract: [{ id: uid(), path: 'accessToken', variable: 'token', enabled: true }],
-  })
-  login.body.mode = 'raw'
-  login.body.rawType = 'json'
-  login.body.raw = JSON.stringify({ username: 'emilys', password: 'emilyspass', expiresInMins: 30 }, null, 2)
-  const me = newRequest('Current user (uses {{token}})', { url: '{{baseUrl}}/auth/me' })
-  me.auth.type = 'bearer'
-  me.auth.bearer.token = '{{token}}'
-  auth.items.push(login, me)
-
-  const products = newRequest('List products', {
-    url: '{{baseUrl}}/products?limit=5&select=title,price',
-    params: [kv('limit', '5'), kv('select', 'title,price')],
-  })
-  const create = newRequest('Create post (dynamic vars)', { method: 'POST', url: '{{baseUrl}}/posts/add' })
-  create.body.mode = 'raw'
-  create.body.raw = JSON.stringify({ title: 'Hello {{$randomInt}}', userId: 5, ref: '{{$uuid}}', at: '{{$isoTimestamp}}' }, null, 2)
-  const image = newRequest('Download image (binary)', { url: 'https://dummyjson.com/image/200x100' })
-
-  col.items.push(auth, products, create, image)
-  state.collections.push(col)
-  if (newEnv) state.environments.push(dev)
-  state.activeEnvId = dev.id
-  state.expanded[col.id] = true
-  state.expanded[auth.id] = true
-  state.active = { collectionId: col.id, requestId: login.id }
-  await db.collections.put(plain(col))
-  await db.environments.put(plain(dev))
-  await setMeta('activeEnvId', dev.id)
-  await setMeta('expanded', { ...state.expanded })
-  await setMeta('active', { ...state.active })
 }
 
 // ---- Settings -----------------------------------------------------------
@@ -455,6 +400,50 @@ export function createEnvironment(name) {
   return env
 }
 
+// ---- Current values (per user, this browser only) -----------------------
+
+function saveEnvCurrent() {
+  debounce('save:envCurrent', SAVE_DELAY, () => setMeta('envCurrent', clone(toRaw(state.envCurrent))))
+}
+
+/** Set this user's current value of a variable (empty string clears it). */
+export function setCurrentValue(envId, varId, value) {
+  const map = (state.envCurrent[envId] ||= {})
+  if (value === '' || value === undefined) delete map[varId]
+  else map[varId] = value
+  saveEnvCurrent()
+}
+
+/**
+ * Environments used to be private, so secret values were stored as the synced value.
+ * Now that environments are shared, move those values into this browser's current
+ * values (once) so they are never uploaded for everyone to see.
+ */
+async function moveSecretsToCurrentValues() {
+  if (await getMeta('secretsMovedToCurrent')) return
+  const now = new Date().toISOString()
+  for (const env of state.environments) {
+    if (env.isGlobal) continue
+    let moved = false
+    for (const v of env.variables) {
+      if (v.isSecret && v.value) {
+        ;(state.envCurrent[env.id] ||= {})[v.id] = v.value
+        v.value = ''
+        moved = true
+      }
+    }
+    if (moved) {
+      env.updatedAt = now
+      await db.environments.put(plain(env))
+    }
+  }
+  await setMeta('envCurrent', clone(toRaw(state.envCurrent)))
+  await setMeta('secretsMovedToCurrent', true)
+}
+
+/** Environments are shared; only their creator (or anyone, before first sync) can delete them. */
+export const canDeleteEnv = (env) => !!env && !env.isGlobal && (!env.ownerId || !state.user || env.ownerId === state.user.id)
+
 export function addEnvironment(env) {
   state.environments.push(env)
   persistEnvironment(env)
@@ -462,21 +451,29 @@ export function addEnvironment(env) {
 
 export async function deleteEnvironment(id) {
   const i = state.environments.findIndex((e) => e.id === id)
-  if (i === -1 || state.environments[i].isGlobal) return
+  if (i === -1 || !canDeleteEnv(state.environments[i])) return
   const [env] = state.environments.splice(i, 1)
+  delete state.envCurrent[id]
+  saveEnvCurrent()
   if (state.activeEnvId === id) setActiveEnv(null)
   await db.environments.delete(id)
   if (env.syncedAt) await db.tombstones.put({ id, table: 'environments' })
   scheduleSync('tombstones', 'all')
 }
 
-/** Set a variable in the active environment (or Globals when none is active). */
+/**
+ * Post-response extraction: store the value as this user's *current value* of the variable
+ * in the active environment (or Globals). Values never go into the shared environment;
+ * a missing variable is added to it with an empty initial value so teammates see its name.
+ */
 export function setVariable(key, value) {
   const env = activeEnv.value || globalEnv.value
   let v = env.variables.find((x) => x.key === key)
-  if (v) v.value = value
-  else env.variables.push((v = { id: uid(), key, value, enabled: true, isSecret: /token|secret|password|key/i.test(key) }))
-  touchEnvironment(env)
+  if (!v) {
+    env.variables.push((v = { id: uid(), key, value: '', enabled: true, isSecret: /token|secret|password|key/i.test(key) }))
+    touchEnvironment(env)
+  }
+  setCurrentValue(env.id, v.id, value)
   return env
 }
 
@@ -603,7 +600,7 @@ async function clearLocalData() {
   await db.transaction('rw', db.collections, db.environments, db.history, db.tombstones, async () => {
     await Promise.all([db.collections.clear(), db.environments.clear(), db.history.clear(), db.tombstones.clear()])
   })
-  await Promise.all(['tabs', 'active', 'activeEnvId', 'lastUserId'].map((k) => db.meta.delete(k)))
+  await Promise.all(['tabs', 'active', 'activeEnvId', 'lastUserId', 'envCurrent'].map((k) => db.meta.delete(k)))
   activityBase.clear()
   pendingLogs.clear()
   const globals = newEnvironment('Globals', true)
@@ -611,6 +608,7 @@ async function clearLocalData() {
   Object.assign(state, {
     collections: [],
     environments: [globals],
+    envCurrent: {},
     history: [],
     tabs: [],
     active: null,
@@ -671,8 +669,14 @@ async function pushCollection(col) {
 }
 
 async function pushEnvironment(env) {
-  const { error } = await supabase.from('environments').upsert(environmentToRow(plain(env), state.user.id))
+  const row = environmentToRow(plain(env), env.ownerId || state.user.id)
+  // Other people's (shared) environments may be updated but not inserted (RLS).
+  const { error } =
+    env.ownerId && env.ownerId !== state.user.id
+      ? await supabase.from('environments').update(row).eq('id', env.id)
+      : await supabase.from('environments').upsert(row)
   if (error) throw error
+  env.ownerId ||= state.user.id
   env.syncedAt = env.updatedAt
   await db.environments.put(plain(env))
 }

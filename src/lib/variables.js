@@ -27,15 +27,21 @@ export const DYNAMIC_DESCRIPTIONS = {
 /**
  * Build the lookup used for interpolation from the global env and the active env.
  * Active env overrides global. Only enabled variables are included.
- * Returns Map<key, { value, isSecret, source }>
+ *
+ * Environments are shared with the team; `v.value` is the shared *initial value*.
+ * `current` holds this user's *current values* ({ [envId]: { [varId]: value } }), kept in
+ * this browser only. A non-empty current value wins over the initial value.
+ * Returns Map<key, { value, isSecret, source, isCurrent }>
  */
-export function buildScope(globalEnv, activeEnv) {
+export function buildScope(globalEnv, activeEnv, current = {}) {
   const scope = new Map()
   for (const env of [globalEnv, activeEnv]) {
     if (!env) continue
     for (const v of env.variables) {
       if (v.enabled !== false && v.key) {
-        scope.set(v.key, { value: v.value ?? '', isSecret: !!v.isSecret, source: env.name })
+        const cur = current[env.id]?.[v.id]
+        const isCurrent = cur !== undefined && cur !== ''
+        scope.set(v.key, { value: isCurrent ? cur : (v.value ?? ''), isSecret: !!v.isSecret, source: env.name, isCurrent })
       }
     }
   }
