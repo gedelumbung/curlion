@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 import { AlertTriangle, Check, Copy, FileDown, Save, WrapText } from 'lucide-vue-next'
 import CodeEditor from './CodeEditor.vue'
 import JsonTree from './JsonTree.vue'
-import { activeError, activeLoading, activeRequest, activeResponse, addSampleNow, state, toast } from '../store.js'
+import { activeError, activeLoading, activeRequest, activeResponse, addSampleNow, isHistoryId, state, toast } from '../store.js'
 import { kv, newSample } from '../lib/model.js'
 import { copyText, formatSize, statusColor } from '../lib/ui.js'
 
@@ -56,7 +56,7 @@ function saveAsSample() {
         <span class="ml-auto font-mono text-xs" :class="statusColor(res.status)">{{ res.status }} {{ res.statusText }}</span>
         <span class="font-mono text-xs text-zinc-400">{{ res.time }} ms</span>
         <span class="font-mono text-xs text-zinc-400">{{ formatSize(res.size) }}</span>
-        <button class="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100" title="Save as Sample / Mock" @click="saveAsSample">
+        <button v-if="!isHistoryId(activeRequest?.id)" class="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100" title="Save as Sample / Mock" @click="saveAsSample">
           <Save :size="13" /> Save as Sample
         </button>
       </template>

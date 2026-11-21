@@ -19,6 +19,7 @@ import ActivityDashboard from './components/ActivityDashboard.vue'
 import AgentModal from './components/AgentModal.vue'
 import AboutModal from './components/AboutModal.vue'
 import UnsavedDialog from './components/UnsavedDialog.vue'
+import SaveRequestDialog from './components/SaveRequestDialog.vue'
 import VarPopover from './components/VarPopover.vue'
 import { activeOverview, activeRequest, addNewRequest, checkAgent, cloudEnabled, init, openTabs, saveNow, send, setActiveEnv, setMode, signOut, state } from './store.js'
 
@@ -275,6 +276,7 @@ const syncLabel = {
     <AboutModal v-if="modal === 'about'" @close="modal = null" />
     <!-- keyed so each prompt in a multi-tab close gets a fresh dialog -->
     <VarPopover v-if="state.varPopover" />
+    <SaveRequestDialog v-if="state.savePrompt" />
     <UnsavedDialog v-if="state.unsavedPrompt" :key="state.unsavedPrompt.index + ':' + state.unsavedPrompt.name" />
     <CollectionModal v-if="modal === 'collection'" :collection="collectionCtx.col" :initial-tab="collectionCtx.tab" @close="modal = null" />
 

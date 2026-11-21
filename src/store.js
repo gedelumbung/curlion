@@ -3,6 +3,7 @@ import { computed, reactive, toRaw, watch } from 'vue'
 import { db, getMeta, migrateLegacyDb, setMeta } from './db/index.js'
 import { clone, findNode, newCollection, newEnvironment, newFolder, newRequest, reId, uid } from './lib/model.js'
 import { buildScope, getByPath } from './lib/variables.js'
+import { paramsFromUrl } from './lib/url.js'
 import { resolveRequest } from './lib/resolve.js'
 import { AGENT_DEFAULT_PORT, pingAgent, sendRequest } from './lib/http.js'
 import { collectionToRow, environmentToRow, rowToCollection, rowToEnvironment, supabase } from './lib/supabase.js'
@@ -27,6 +28,7 @@ export const state = reactive({
   drafts: {}, // requestId -> working copy edited in its tab; saved into the collection on Save
   unsavedPrompt: null, // { name, index, total, showIgnoreAll, resolve } for the close-tab dialog
   varPopover: null, // { name, rect } inline {{variable}} editor opened by clicking a variable
+  savePrompt: null, // { requestId, name, resolve } "Save to collection" dialog for history tabs
   expanded: {}, // folder/collection id -> bool
   search: '',
   responses: {}, // requestId -> response (kept per request for this session)
@@ -53,6 +55,7 @@ export const scope = computed(() => buildScope(globalEnv.value, activeEnv.value,
 export const activeCollection = computed(() => state.collections.find((c) => c.id === state.active?.collectionId) || null)
 /** The request shown in the editor: its unsaved working copy (draft), else the saved node. */
 export const activeRequest = computed(() => {
+  if (isHistoryId(state.active?.requestId)) return state.drafts[state.active.requestId] || null
   const col = activeCollection.value
   if (!col) return null
   const hit = findNode(col.items, state.active.requestId)
@@ -71,9 +74,20 @@ export const activeOverview = computed(() =>
   state.active?.requestId === collectionTabId(state.active?.collectionId) ? activeCollection.value : null,
 )
 
+/**
+ * History tabs (like Postman): a request opened from History is a copy of what was sent,
+ * not part of any collection until saved. id 'hist:<history entry id>'.
+ */
+export const isHistoryId = (id) => typeof id === 'string' && id.startsWith('hist:')
+export const isHistoryTab = (t) => t?.kind === 'history'
+
 /** Open tabs resolved to their collection + request (tabs whose request no longer exists are skipped). */
 export const openTabs = computed(() =>
   state.tabs.flatMap((tab) => {
+    if (isHistoryTab(tab)) {
+      const draft = state.drafts[tab.requestId]
+      return draft ? [{ tab, col: null, req: draft, dirty: json(draft) !== draftBase.get(tab.requestId) }] : []
+    }
     const col = state.collections.find((c) => c.id === tab.collectionId)
     if (isCollectionTab(tab)) return col ? [{ tab, col, req: null, dirty: false }] : []
     const hit = col && findNode(col.items, tab.requestId)
@@ -152,6 +166,7 @@ export function touchEnvironment(env) {
 /** Ctrl+S: write everything now and sync immediately. */
 /** Ctrl/⌘+S and the Save button: save the active request's edits, then store and sync everything. */
 export async function saveNow() {
+  if (isHistoryId(state.active?.requestId)) return saveHistoryTab(state.active.requestId)
   if (state.active) saveRequest(state.active.requestId)
   const draftsTimer = timers.has('save:drafts')
   await flushTimers('save:')
@@ -209,6 +224,7 @@ export async function init() {
   }
 
   const exists = (t) => {
+    if (t && isHistoryId(t.requestId)) return true // resolved below from its history entry or saved draft
     const col = t && state.collections.find((c) => c.id === t.collectionId)
     if (!col) return false
     return t.requestId === collectionTabId(col.id) || !!findNode(col.items, t.requestId)
@@ -222,6 +238,15 @@ export async function init() {
   // restore unsaved edits, then give every open tab its working copy
   const savedDrafts = (await getMeta('drafts', {})) || {}
   for (const t of state.tabs) {
+    if (isHistoryTab(t)) {
+      const h = state.history.find((x) => `hist:${x.id}` === t.requestId)
+      const original = h ? requestFromHistory(h) : null
+      const draft = savedDrafts[t.requestId] || original
+      if (!draft) continue // history entry gone and nothing edited: tab is dropped
+      state.drafts[t.requestId] = draft
+      draftBase.set(t.requestId, json(original || draft))
+      continue
+    }
     const found = findRequest(t.requestId, t.collectionId)
     if (!found) continue
     draftBase.set(t.requestId, json(found.node))
@@ -392,8 +417,13 @@ export async function requestCloseTabs(requestIds) {
     if (choice === 'ignoreAll') break
     if (choice === 'save') save.push(id)
   }
-  for (const id of save) saveRequest(id)
-  closeTabs((t) => requestIds.includes(t.requestId))
+  const keep = new Set()
+  for (const id of save) {
+    if (isHistoryId(id)) {
+      if (!(await saveHistoryTab(id))) keep.add(id) // cancelled: leave that tab open
+    } else saveRequest(id)
+  }
+  closeTabs((t) => requestIds.includes(t.requestId) && !keep.has(t.requestId))
   return true
 }
 
@@ -777,6 +807,7 @@ async function addHistory(req, resolved, res) {
     url: resolved.url,
     status: res.status,
     time: res.time,
+    request: historySnapshot(req), // what was sent, with {{variables}} as written
   }
   const id = await db.history.add(entry)
   state.history.unshift({ ...entry, id })
@@ -784,6 +815,59 @@ async function addHistory(req, resolved, res) {
     const extra = state.history.splice(HISTORY_LIMIT)
     db.history.bulkDelete(extra.map((e) => e.id))
   }
+}
+
+/** The request as written (not resolved), without samples or picked files. */
+function historySnapshot(req) {
+  const { id, samples, ...rest } = clone(toRaw(req))
+  return rest
+}
+
+/** Request for a history entry: its snapshot, or (older entries) one built from method + URL. */
+function requestFromHistory(h) {
+  const base = h.request ? clone(h.request) : newRequest(h.name || h.url, { method: h.method, url: h.url, params: paramsFromUrl(h.url || '', []) })
+  return { ...newRequest(base.name), ...base, id: `hist:${h.id}`, samples: [] }
+}
+
+/** Sidebar History click: open what was sent in a history tab (preview), like Postman. */
+export function openHistoryEntry(h, { preview = true } = {}) {
+  const id = `hist:${h.id}`
+  if (!state.drafts[id]) {
+    const req = requestFromHistory(h)
+    state.drafts[id] = req
+    draftBase.set(id, json(req))
+  }
+  openRequest(null, id, { preview, kind: 'history' })
+}
+
+/**
+ * Save a history tab into a collection (asks for the collection and name first).
+ * The tab then becomes a normal request tab. Resolves false when cancelled.
+ */
+export async function saveHistoryTab(requestId) {
+  const draft = state.drafts[requestId]
+  if (!draft) return false
+  const answer = await new Promise((resolve) => (state.savePrompt = { requestId, name: draft.name, resolve }))
+  state.savePrompt = null
+  if (!answer) return false
+  const col = answer.collectionId === '__new__' ? createCollection(answer.newCollectionName || 'My Collection') : state.collections.find((c) => c.id === answer.collectionId)
+  if (!col) return false
+  const req = { ...clone(toRaw(draft)), id: uid(), name: answer.name || draft.name, samples: [] }
+  const idx = state.tabs.findIndex((t) => t.requestId === requestId)
+  addRequest(col, null, req) // stores, syncs, logs and opens it in a tab
+  // put the new tab where the history tab was, and drop the history tab
+  const newIdx = state.tabs.findIndex((t) => t.requestId === req.id)
+  if (idx !== -1 && newIdx !== -1) {
+    const [t] = state.tabs.splice(newIdx, 1)
+    state.tabs.splice(idx, 0, t)
+  }
+  if (state.responses[requestId]) state.responses[req.id] = state.responses[requestId]
+  closeTabs((t) => t.requestId === requestId)
+  toast(`Saved to "${col.name}"`, 'success', 1800)
+  return true
+}
+export function answerSavePrompt(answer) {
+  state.savePrompt?.resolve(answer)
 }
 
 export async function clearHistory() {
@@ -832,6 +916,7 @@ async function clearLocalData() {
     envCurrent: {},
     drafts: {},
     unsavedPrompt: null,
+    savePrompt: null,
     history: [],
     tabs: [],
     active: null,

@@ -6,7 +6,7 @@ import UiSelect from './UiSelect.vue'
 import KeyValueEditor from './KeyValueEditor.vue'
 import CodeEditor from './CodeEditor.vue'
 import SamplesPanel from './SamplesPanel.vue'
-import { activeLoading, activeRequest, activeResponse, cancel, isDirty, keepTab, persistDrafts, saveNow, send, state, toast } from '../store.js'
+import { activeLoading, activeRequest, activeResponse, cancel, isDirty, isHistoryId, keepTab, persistDrafts, saveNow, send, state, toast } from '../store.js'
 import { METHODS, uid } from '../lib/model.js'
 import { paramsFromUrl, urlFromParams } from '../lib/url.js'
 import { looksLikeCurl, parseCurl } from '../lib/curl.js'
@@ -30,6 +30,7 @@ watch(
   { deep: true },
 )
 const dirty = computed(() => !!req.value && isDirty(req.value.id))
+const fromHistory = computed(() => !!req.value && isHistoryId(req.value.id)) // opened from History, not in a collection yet
 
 const methodOptions = METHODS.map((m) => ({ value: m, label: m, class: `font-mono font-semibold ${methodColor[m]}` }))
 const AUTH_TYPES = [
@@ -146,6 +147,15 @@ defineExpose({ applyCurl })
         <Code2 :size="15" /> Code
       </button>
       <button
+        v-if="fromHistory"
+        class="inline-flex items-center gap-1 rounded bg-zinc-800 px-2 py-1 text-xs text-zinc-100 hover:bg-zinc-700"
+        title="Save this request to a collection (Ctrl/⌘+S)"
+        @click="saveNow"
+      >
+        <Save :size="14" /> Save to collection
+      </button>
+      <button
+        v-else
         class="inline-flex items-center gap-1 rounded px-2 py-1 text-xs"
         :class="dirty ? 'bg-zinc-800 text-zinc-100 hover:bg-zinc-700' : 'cursor-default text-zinc-600'"
         :disabled="!dirty"

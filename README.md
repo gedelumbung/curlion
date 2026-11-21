@@ -59,7 +59,7 @@ netlify dev        # runs Vite + edge functions at /api/proxy and /mock/*
 | Send and Download + automatic binary response detection (`Content-Disposition`, pdf/zip/images) | ✅ |
 | Direct Browser Mode & Netlify Proxy Mode (localhost is blocked by the proxy, with a clear message) | ✅ |
 | **Agent Mode** (like Postman's Desktop Agent): requests go through the Curlion Agent on your computer, so they reach localhost / your local network, skip CORS and can set Cookie/Host/User-Agent | ✅ |
-| Live sidebar search (name/folder/URL), request history | ✅ |
+| Live sidebar search (name/folder/URL), request history: clicking an entry opens the request exactly as it was sent (method, URL, params, headers, auth, body) in a tab, to resend, edit or **Save to collection** | ✅ |
 | Import Postman Collection v2.1 (folders, auth, body, saved responses → samples, variables → environment) | ✅ |
 | Export a collection to Postman v2.1 JSON | ✅ |
 | Environments + Globals, switcher, `{{var}}` green/red highlighting + value on hover, `{{` autocomplete | ✅ |

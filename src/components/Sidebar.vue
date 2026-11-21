@@ -7,6 +7,7 @@ import {
   addFolder,
   collectionTabId,
   openCollectionOverview,
+  openHistoryEntry,
   addRequest,
   clearHistory,
   createCollection,
@@ -106,10 +107,8 @@ function runItem(item) {
   item.run()
 }
 
-function openHistory(h) {
-  const col = state.collections.find((c) => c.id === h.collectionId)
-  if (col && findNode(col.items, h.requestId)) openRequest(col.id, h.requestId, { preview: true })
-}
+// History click: open what was sent in a tab, like Postman (double-click keeps the tab)
+const openHistory = (h) => openHistoryEntry(h)
 function askClearHistory() {
   if (confirm('Clear history?')) clearHistory()
 }
@@ -195,7 +194,7 @@ const fmtTime = (ts) => new Date(ts).toLocaleString(undefined, { hour: '2-digit'
         <button v-if="state.history.length" class="hover:text-red-400" @click="askClearHistory">Clear</button>
       </div>
       <div class="min-h-0 flex-1 overflow-y-auto px-1 pb-4">
-        <button v-for="h in state.history" :key="h.id" class="flex w-full flex-col rounded px-2 py-1.5 text-left hover:bg-zinc-800/60" @click="openHistory(h)">
+        <button v-for="h in state.history" :key="h.id" class="flex w-full flex-col rounded px-2 py-1.5 text-left hover:bg-zinc-800/60" @click="openHistory(h)" @dblclick="openHistoryEntry(h, { preview: false })" :title="h.request ? 'Open this request as it was sent' : 'Open (older entry: method and URL only)'">
           <span class="flex items-center gap-2 text-[13px]">
             <span class="font-mono text-[10px] font-bold" :class="methodColor[h.method]">{{ h.method }}</span>
             <span class="truncate text-zinc-300">{{ h.name }}</span>
