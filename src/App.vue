@@ -16,11 +16,12 @@ import LoginScreen from './components/LoginScreen.vue'
 import CollectionModal from './components/CollectionModal.vue'
 import ActivityDashboard from './components/ActivityDashboard.vue'
 import AgentModal from './components/AgentModal.vue'
+import AboutModal from './components/AboutModal.vue'
 import UnsavedDialog from './components/UnsavedDialog.vue'
 import VarPopover from './components/VarPopover.vue'
 import { activeOverview, activeRequest, addNewRequest, checkAgent, cloudEnabled, init, openTabs, saveNow, send, setActiveEnv, setMode, signOut, state } from './store.js'
 
-const modal = ref(null) // env | import | code | collection | activity | agent
+const modal = ref(null) // env | import | code | collection | activity | agent | about
 const collectionCtx = ref(null) // { col, tab }
 function openCollection(ctx) {
   collectionCtx.value = ctx
@@ -169,6 +170,11 @@ const syncLabel = {
           <button class="border-l border-zinc-700 p-1.5 text-zinc-400 hover:text-zinc-100" title="Manage environments" @click="modal = 'env'"><Settings2 :size="14" /></button>
         </div>
 
+        <!-- About -->
+        <button class="rounded-md p-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100" title="About Curlion" aria-label="About Curlion" @click="modal = 'about'">
+          <Info :size="16" />
+        </button>
+
         <!-- Theme switch: on = dark -->
         <button
           role="switch"
@@ -255,6 +261,7 @@ const syncLabel = {
     <CodeModal v-if="modal === 'code'" @close="modal = null" />
     <ActivityDashboard v-if="modal === 'activity'" @close="modal = null" />
     <AgentModal v-if="modal === 'agent'" @close="modal = null" />
+    <AboutModal v-if="modal === 'about'" @close="modal = null" />
     <!-- keyed so each prompt in a multi-tab close gets a fresh dialog -->
     <VarPopover v-if="state.varPopover" />
     <UnsavedDialog v-if="state.unsavedPrompt" :key="state.unsavedPrompt.index + ':' + state.unsavedPrompt.name" />
