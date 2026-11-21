@@ -89,8 +89,8 @@ function findParentId(items, id, parent = null) {
 <template>
   <div v-if="visible">
     <div
-      class="group flex cursor-pointer items-center gap-1.5 rounded py-1 pr-1 text-[13px]"
-      :class="[active ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200', dropHint ? 'ring-1 ring-orange-500' : '']"
+      class="tree-row group gap-1.5 pr-1"
+      :class="[active ? 'active' : 'text-zinc-400 hover:text-zinc-200', dropHint ? 'ring-1 ring-orange-500 ring-inset' : '']"
       :style="{ paddingLeft: depth * 12 + 'px' }"
       :draggable="canEdit(collection)"
       @click="click"

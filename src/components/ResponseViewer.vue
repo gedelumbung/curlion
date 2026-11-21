@@ -6,6 +6,7 @@ import JsonTree from './JsonTree.vue'
 import { activeError, activeLoading, activeRequest, activeResponse, addSampleNow, isHistoryId, state, toast } from '../store.js'
 import { kv, newSample } from '../lib/model.js'
 import { copyText, formatSize, statusColor } from '../lib/ui.js'
+import { indentString } from '../lib/settings.js'
 
 const res = activeResponse
 const tab = ref('body')
@@ -19,7 +20,7 @@ const lang = computed(() => {
 })
 const pretty = computed(() => {
   if (!res.value) return ''
-  if (res.value.json !== undefined) return JSON.stringify(res.value.json, null, 2)
+  if (res.value.json !== undefined) return JSON.stringify(res.value.json, null, indentString())
   return res.value.body
 })
 

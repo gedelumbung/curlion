@@ -158,7 +158,7 @@ const enabledRows = (rows) => (rows || []).filter((r) => r.enabled !== false && 
             </p>
             <div class="mt-4 flex flex-wrap gap-1 text-xs">
               <span class="mr-1 self-center text-zinc-500">Code samples:</span>
-              <button v-for="l in LANGS" :key="l.id" class="rounded px-2.5 py-1" :class="lang === l.id ? 'bg-orange-500 text-white' : 'bg-zinc-900 text-zinc-400 hover:text-zinc-100'" @click="lang = l.id">{{ l.label }}</button>
+              <button v-for="l in LANGS" :key="l.id" class="rounded px-2.5 py-1" :class="lang === l.id ? 'bg-orange-500 text-on-accent' : 'bg-zinc-900 text-zinc-400 hover:text-zinc-100'" @click="lang = l.id">{{ l.label }}</button>
             </div>
           </header>
 

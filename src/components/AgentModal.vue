@@ -97,7 +97,7 @@ function useAgent() {
           The agent only listens on 127.0.0.1 and only accepts requests from <span class="text-zinc-300">{{ origin }}</span>.
           Self-signed HTTPS certificates are accepted; add <code>--strict-tls</code> to verify them.
         </p>
-        <button v-if="state.mode !== 'agent'" class="rounded bg-orange-500 px-4 py-1.5 font-medium text-white hover:bg-orange-600" @click="useAgent">Use Agent mode</button>
+        <button v-if="state.mode !== 'agent'" class="rounded bg-orange-500 px-4 py-1.5 font-medium text-on-accent hover:bg-orange-600" @click="useAgent">Use Agent mode</button>
       </div>
     </div>
   </Modal>

@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { ChevronDown, Code2, Download, Loader2, Plus, Save, Send, Trash2, Wand2 } from 'lucide-vue-next'
 import VarInput from './VarInput.vue'
 import UiSelect from './UiSelect.vue'
+import { indentString } from '../lib/settings.js'
 import KeyValueEditor from './KeyValueEditor.vue'
 import CodeEditor from './CodeEditor.vue'
 import SamplesPanel from './SamplesPanel.vue'
@@ -91,7 +92,7 @@ const bodyModes = [
 ]
 function beautify() {
   try {
-    req.value.body.raw = JSON.stringify(JSON.parse(req.value.body.raw), null, 2)
+    req.value.body.raw = JSON.stringify(JSON.parse(req.value.body.raw), null, indentString())
   } catch (e) {
     toast('Invalid JSON: ' + e.message, 'error')
   }
@@ -142,7 +143,7 @@ defineExpose({ applyCurl })
   <section v-if="req" class="flex min-h-0 flex-col">
     <!-- Name -->
     <div class="flex items-center gap-2 px-4 pt-3">
-      <input v-model="req.name" class="min-w-0 flex-1 truncate bg-transparent text-sm font-medium text-zinc-200 outline-none hover:text-white focus:text-zinc-100" />
+      <input v-model="req.name" class="min-w-0 flex-1 truncate bg-transparent text-sm font-medium text-zinc-200 outline-none hover:text-zinc-100 focus:text-zinc-100" />
       <button class="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100" title="Generate code snippet" @click="emit('show-code')">
         <Code2 :size="15" /> Code
       </button>
@@ -182,7 +183,7 @@ defineExpose({ applyCurl })
       <div class="relative flex">
         <button
           v-if="!activeLoading"
-          class="inline-flex items-center gap-2 rounded-l-md bg-orange-500 px-4 text-sm font-semibold text-white hover:bg-orange-600"
+          class="inline-flex items-center gap-2 rounded-l-md bg-orange-500 px-4 text-sm font-semibold text-on-accent hover:bg-orange-600"
           title="Send (Ctrl+Enter)"
           @click="doSend()"
         >
@@ -191,7 +192,7 @@ defineExpose({ applyCurl })
         <button v-else class="inline-flex items-center gap-2 rounded-l-md bg-zinc-700 px-4 text-sm font-semibold text-zinc-100 hover:bg-zinc-600" @click="cancel()">
           <Loader2 :size="15" class="animate-spin" /> Cancel
         </button>
-        <button class="rounded-r-md border-l border-orange-700 bg-orange-500 px-1.5 text-white hover:bg-orange-600" @click="sendMenu = !sendMenu">
+        <button class="rounded-r-md border-l border-orange-700 bg-orange-500 px-1.5 text-on-accent hover:bg-orange-600" @click="sendMenu = !sendMenu">
           <ChevronDown :size="15" />
         </button>
         <div v-if="sendMenu" class="absolute top-full right-0 z-20 mt-1 w-48 rounded-md border border-zinc-700 bg-zinc-800 py-1 shadow-xl" @mouseleave="sendMenu = false">

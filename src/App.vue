@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { Activity, Cloud, CloudOff, Globe2, Info, Laptop, Loader2, LogOut, Monitor, Moon, Settings2, Sun, Zap } from 'lucide-vue-next'
+import { Activity, CloudOff, Globe2, Info, Laptop, Loader2, LogOut, Monitor, Moon, Settings2, SlidersHorizontal, Sun, Zap } from 'lucide-vue-next'
 import { setDark, theme } from './lib/theme.js'
 import { vTopLayer } from './lib/topLayer.js'
 import Sidebar from './components/Sidebar.vue'
@@ -18,18 +18,25 @@ import CollectionModal from './components/CollectionModal.vue'
 import ActivityDashboard from './components/ActivityDashboard.vue'
 import AgentModal from './components/AgentModal.vue'
 import AboutModal from './components/AboutModal.vue'
+import SettingsModal from './components/SettingsModal.vue'
 import UnsavedDialog from './components/UnsavedDialog.vue'
 import SaveRequestDialog from './components/SaveRequestDialog.vue'
 import VarPopover from './components/VarPopover.vue'
 import { activeOverview, activeRequest, addNewRequest, checkAgent, cloudEnabled, init, openTabs, saveNow, send, setActiveEnv, setMode, signOut, state } from './store.js'
 
-const modal = ref(null) // env | import | code | collection | activity | agent | about
+const modal = ref(null) // env | import | code | collection | activity | agent | about | settings
 const collectionCtx = ref(null) // { col, tab }
 function openCollection(ctx) {
   collectionCtx.value = ctx
   modal.value = 'collection'
 }
 const sidebarOpen = ref(true)
+
+const MODES = [
+  { id: 'direct', label: 'Direct', icon: Monitor, title: 'Direct: fetch from your browser. Works with localhost if the API allows CORS.' },
+  { id: 'proxy', label: 'Proxy', icon: Zap, title: 'Proxy: through the Netlify proxy, bypasses CORS for public APIs. Cannot reach localhost.' },
+  { id: 'agent', label: 'Agent', icon: Laptop, title: 'Agent: send from your computer through the Curlion Agent (localhost, local network, no CORS)' },
+]
 
 const envOptions = computed(() => [
   { value: '', label: 'No environment', class: 'text-zinc-400' },
@@ -137,92 +144,77 @@ const syncLabel = {
 
   <div v-else class="flex h-screen flex-col bg-zinc-950 text-zinc-200">
     <!-- Top bar -->
-    <header :inert="!!modal" class="flex h-12 shrink-0 items-center gap-3 border-b border-zinc-800 px-3">
-      <button class="flex items-center gap-2 font-semibold" title="Toggle sidebar" @click="sidebarOpen = !sidebarOpen">
-        <CurlionLogo class="h-6 w-6 text-zinc-100" />
-        <span class="hidden sm:inline">Curlion</span>
+    <header :inert="!!modal" class="flex h-11 shrink-0 items-center gap-2 border-b border-zinc-800 bg-zinc-925 px-3">
+      <button class="flex items-center gap-2 rounded px-1 py-1 hover:bg-zinc-800/60" title="Toggle sidebar" @click="sidebarOpen = !sidebarOpen">
+        <CurlionLogo class="h-[22px] w-[22px]" />
+        <span class="hidden text-[15px] font-semibold tracking-tight text-zinc-100 sm:inline">Curlion</span>
       </button>
 
-      <div class="ml-auto flex items-center gap-2 text-sm">
-        <!-- Mode -->
-        <div class="flex rounded-md border border-zinc-700 p-0.5 text-xs">
-          <button class="inline-flex items-center gap-1 rounded px-2 py-1" :class="state.mode === 'direct' ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-400 hover:text-zinc-200'" title="Direct Browser Mode: fetch from your browser. Works with localhost if the API allows CORS." @click="setMode('direct')">
-            <Monitor :size="13" /> Direct
-          </button>
-          <button class="inline-flex items-center gap-1 rounded px-2 py-1" :class="state.mode === 'proxy' ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-400 hover:text-zinc-200'" title="Netlify Proxy Mode: bypasses CORS for public APIs. Cannot reach localhost." @click="setMode('proxy')">
-            <Zap :size="13" /> Proxy
-          </button>
+      <div class="ml-auto flex items-center gap-1.5 text-xs">
+        <!-- Send mode -->
+        <div class="flex items-center rounded-md bg-zinc-900 p-0.5" role="radiogroup" aria-label="Send mode">
           <button
-            class="inline-flex items-center gap-1 rounded px-2 py-1"
-            :class="state.mode === 'agent' ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-400 hover:text-zinc-200'"
-            :title="state.mode === 'agent' ? `Agent mode: ${state.agent.status === 'online' ? 'agent running' : 'agent not running'}. Click for setup.` : 'Agent mode: send from your computer through the Curlion Agent (localhost, local network, no CORS)'"
-            @click="pickAgent"
+            v-for="m in MODES"
+            :key="m.id"
+            role="radio"
+            :aria-checked="state.mode === m.id"
+            class="relative inline-flex h-6 items-center gap-1.5 rounded px-2.5 transition-colors"
+            :class="state.mode === m.id ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-500 hover:text-zinc-200'"
+            :title="m.id === 'agent' && state.mode === 'agent' ? `Agent ${state.agent.status === 'online' ? 'running' : 'not running'}. Click for setup.` : m.title"
+            @click="m.id === 'agent' ? pickAgent() : setMode(m.id)"
           >
-            <Laptop :size="13" /> Agent
+            <component :is="m.icon" :size="13" />
+            {{ m.label }}
             <span
-              v-if="state.mode === 'agent'"
+              v-if="m.id === 'agent' && state.mode === 'agent'"
               class="h-1.5 w-1.5 rounded-full"
               :class="state.agent.status === 'online' ? 'bg-emerald-500' : state.agent.status === 'offline' ? 'bg-red-500' : 'bg-zinc-500'"
             ></span>
           </button>
         </div>
 
-        <!-- Environment switcher -->
-        <div class="flex items-center rounded-md border border-zinc-700">
-          <Globe2 :size="14" class="ml-2 text-zinc-500" />
+        <span class="mx-1 h-5 w-px bg-zinc-800"></span>
+
+        <!-- Environment -->
+        <div class="flex items-center rounded-md hover:bg-zinc-900">
+          <Globe2 :size="14" class="ml-2 shrink-0" :class="state.activeEnvId ? 'text-orange-500' : 'text-zinc-500'" />
           <UiSelect
             :model-value="state.activeEnvId || ''"
             :options="envOptions"
             class="w-40"
-            button-class="px-2 py-1 text-xs"
+            button-class="h-7 px-2 text-xs"
             menu-width="14rem"
             title="Active environment"
             @update:model-value="setActiveEnv($event || null)"
           />
-          <button class="border-l border-zinc-700 p-1.5 text-zinc-400 hover:text-zinc-100" title="Manage environments" @click="modal = 'env'"><Settings2 :size="14" /></button>
         </div>
+        <button class="icon-btn" title="Manage environments" @click="modal = 'env'"><Settings2 :size="15" /></button>
 
-        <!-- About -->
-        <button class="rounded-md p-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100" title="About Curlion" aria-label="About Curlion" @click="modal = 'about'">
-          <Info :size="16" />
-        </button>
+        <span class="mx-1 h-5 w-px bg-zinc-800"></span>
 
-        <!-- Theme switch: on = dark -->
-        <button
-          role="switch"
-          :aria-checked="theme === 'dark'"
-          :title="theme === 'dark' ? 'Dark mode on (click for light)' : 'Dark mode off (click for dark)'"
-          class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border border-zinc-700 transition-colors"
-          :class="theme === 'dark' ? 'bg-zinc-800' : 'bg-zinc-900'"
-          @click="setDark(theme !== 'dark')"
-        >
-          <span class="absolute flex h-5 w-5 items-center justify-center rounded-full shadow transition-transform" :class="theme === 'dark' ? 'translate-x-5 bg-orange-500 text-white' : 'translate-x-0.5 bg-white text-amber-500'">
-            <Moon v-if="theme === 'dark'" :size="12" />
-            <Sun v-else :size="12" />
-          </span>
+        <button v-if="cloudEnabled && state.user" class="icon-btn" title="Activity log: who changed what" @click="modal = 'activity'"><Activity :size="15" /></button>
+        <button class="icon-btn" :title="theme === 'dark' ? 'Switch to Ayu Light' : 'Switch to Ayu Dark'" @click="setDark(theme !== 'dark')">
+          <Sun v-if="theme === 'dark'" :size="15" />
+          <Moon v-else :size="15" />
         </button>
-
-        <!-- Workspace activity log -->
-        <button v-if="cloudEnabled && state.user" class="inline-flex items-center gap-1.5 rounded-md border border-zinc-700 px-2 py-1 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100" title="Activity log: who changed what" @click="modal = 'activity'">
-          <Activity :size="14" /> <span class="hidden lg:inline">Activity</span>
-        </button>
+        <button class="icon-btn" title="Settings" @click="modal = 'settings'"><SlidersHorizontal :size="15" /></button>
+        <button class="icon-btn" title="About Curlion" @click="modal = 'about'"><Info :size="15" /></button>
 
         <!-- Account / sync -->
         <template v-if="cloudEnabled">
-          <div class="flex items-center gap-2 text-xs">
-            <span class="inline-flex items-center gap-1" :class="state.sync.status === 'error' ? 'text-red-400' : 'text-zinc-400'" :title="state.sync.message || state.user.email">
-              <Loader2 v-if="state.sync.status === 'syncing'" :size="13" class="animate-spin" />
-              <Cloud v-else :size="13" />
-              {{ syncLabel[state.sync.status] }}
-            </span>
-            <span class="hidden max-w-40 truncate text-zinc-500 md:inline">{{ state.user.email }}</span>
-            <button class="rounded p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-100 disabled:opacity-60" :title="signingOut ? 'Syncing, then signing out…' : 'Sign out'" :disabled="signingOut" @click="doSignOut">
-              <Loader2 v-if="signingOut" :size="14" class="animate-spin" />
-              <LogOut v-else :size="14" />
-            </button>
-          </div>
+          <span class="mx-1 h-5 w-px bg-zinc-800"></span>
+          <span class="inline-flex items-center gap-1.5 px-1" :class="state.sync.status === 'error' ? 'text-red-400' : 'text-zinc-500'" :title="state.sync.message || state.user.email">
+            <Loader2 v-if="state.sync.status === 'syncing'" :size="13" class="animate-spin" />
+            <span v-else class="h-1.5 w-1.5 rounded-full" :class="state.sync.status === 'error' ? 'bg-red-500' : 'bg-emerald-500'"></span>
+            {{ syncLabel[state.sync.status] }}
+          </span>
+          <span class="hidden max-w-40 truncate text-zinc-500 lg:inline">{{ state.user.email }}</span>
+          <button class="icon-btn disabled:opacity-60" :title="signingOut ? 'Syncing, then signing out…' : 'Sign out'" :disabled="signingOut" @click="doSignOut">
+            <Loader2 v-if="signingOut" :size="15" class="animate-spin" />
+            <LogOut v-else :size="15" />
+          </button>
         </template>
-        <span v-else class="inline-flex items-center gap-1 text-xs text-zinc-500" title="Supabase is not configured. Data is stored in this browser only (IndexedDB).">
+        <span v-else class="ml-1 inline-flex items-center gap-1.5 text-zinc-500" title="Supabase is not configured. Data is stored in this browser only (IndexedDB).">
           <CloudOff :size="13" /> Local only
         </span>
       </div>
@@ -258,7 +250,7 @@ const syncLabel = {
           <CurlionLogo class="h-12 w-12 text-zinc-100 opacity-60" />
           <p>Select a request from the sidebar, or</p>
           <div class="flex gap-2">
-            <button class="rounded bg-orange-500 px-4 py-1.5 text-sm font-medium text-white hover:bg-orange-600" @click="addNewRequest">New request</button>
+            <button class="rounded bg-orange-500 px-4 py-1.5 text-sm font-medium text-on-accent hover:bg-orange-600" @click="addNewRequest">New request</button>
             <button class="rounded bg-zinc-800 px-4 py-1.5 text-sm text-zinc-200 hover:bg-zinc-700" @click="modal = 'import'">Import</button>
           </div>
           <p class="mt-4 flex items-center gap-1 text-xs text-zinc-600">
@@ -274,6 +266,7 @@ const syncLabel = {
     <ActivityDashboard v-if="modal === 'activity'" @close="modal = null" />
     <AgentModal v-if="modal === 'agent'" @close="modal = null" />
     <AboutModal v-if="modal === 'about'" @close="modal = null" />
+    <SettingsModal v-if="modal === 'settings'" @close="modal = null" />
     <!-- keyed so each prompt in a multi-tab close gets a fresh dialog -->
     <VarPopover v-if="state.varPopover" />
     <SaveRequestDialog v-if="state.savePrompt" />

@@ -42,7 +42,7 @@ function save() {
     </form>
     <template #footer>
       <button class="rounded px-3 py-1.5 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100" @click="answerSavePrompt(null)">Cancel</button>
-      <button class="rounded bg-orange-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-orange-600" @click="save">Save</button>
+      <button class="rounded bg-orange-500 px-3 py-1.5 text-xs font-medium text-on-accent hover:bg-orange-600" @click="save">Save</button>
     </template>
   </Modal>
 </template>

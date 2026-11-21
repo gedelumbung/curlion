@@ -101,7 +101,7 @@ function remove() {
 
       <!-- Actions -->
       <div class="mt-4 flex flex-wrap gap-2 text-xs">
-        <button class="inline-flex items-center gap-1.5 rounded bg-orange-500 px-3 py-1.5 font-medium text-white hover:bg-orange-600" @click="addRequest(col, null)"><FilePlus :size="14" /> New request</button>
+        <button class="inline-flex items-center gap-1.5 rounded bg-orange-500 px-3 py-1.5 font-medium text-on-accent hover:bg-orange-600" @click="addRequest(col, null)"><FilePlus :size="14" /> New request</button>
         <button class="inline-flex items-center gap-1.5 rounded bg-zinc-800 px-3 py-1.5 text-zinc-200 hover:bg-zinc-700" @click="addFolder(col, null)"><FolderPlus :size="14" /> New folder</button>
         <button class="inline-flex items-center gap-1.5 rounded bg-zinc-800 px-3 py-1.5 text-zinc-200 hover:bg-zinc-700" @click="emit('collection', { col, tab: 'publish' })"><Globe :size="14" /> Publish docs</button>
         <button class="inline-flex items-center gap-1.5 rounded bg-zinc-800 px-3 py-1.5 text-zinc-200 hover:bg-zinc-700" @click="emit('collection', { col, tab: 'activity' })"><History :size="14" /> Activity log</button>

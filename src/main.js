@@ -2,6 +2,7 @@ import { createApp } from 'vue'
 import './style.css'
 import './lib/legacyStorage.js' // must run before theme.js reads its key
 import './lib/theme.js' // sets data-theme before first paint
+import './lib/settings.js' // fonts, sizes, editor options
 import App from './App.vue'
 import DocsPage from './components/DocsPage.vue'
 

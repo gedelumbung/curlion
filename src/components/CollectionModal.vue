@@ -154,7 +154,7 @@ const tabs = [
           <p v-if="!slugValid" class="mt-1 text-xs text-red-400">3–64 characters: lowercase letters, numbers and dashes.</p>
 
           <div class="mt-4 flex flex-wrap items-center gap-2">
-            <button :disabled="busy || !slugValid" class="inline-flex items-center gap-1.5 rounded bg-orange-500 px-4 py-1.5 font-medium text-white hover:bg-orange-600 disabled:opacity-50" @click="publish">
+            <button :disabled="busy || !slugValid" class="inline-flex items-center gap-1.5 rounded bg-orange-500 px-4 py-1.5 font-medium text-on-accent hover:bg-orange-600 disabled:opacity-50" @click="publish">
               <Loader2 v-if="busy" :size="14" class="animate-spin" />
               {{ published ? 'Update published docs' : 'Publish docs' }}
             </button>

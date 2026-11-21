@@ -97,7 +97,7 @@ function importCurl() {
         </label>
         <p class="mt-4 mb-1 text-xs text-zinc-500">…or paste the JSON</p>
         <textarea v-model="pasted" rows="5" class="w-full rounded border border-zinc-700 bg-zinc-900 p-2 font-mono text-xs outline-none focus:border-zinc-500" placeholder='{ "info": { ... }, "item": [ ... ] }'></textarea>
-        <button class="mt-2 rounded bg-orange-500 px-4 py-1.5 font-medium text-white hover:bg-orange-600 disabled:opacity-40" :disabled="!pasted.trim()" @click="importJson(pasted)">Import JSON</button>
+        <button class="mt-2 rounded bg-orange-500 px-4 py-1.5 font-medium text-on-accent hover:bg-orange-600 disabled:opacity-40" :disabled="!pasted.trim()" @click="importJson(pasted)">Import JSON</button>
       </template>
 
       <template v-else>
@@ -105,7 +105,7 @@ function importCurl() {
         <div class="mt-2 flex items-center gap-2">
           <span class="text-xs text-zinc-500">Add to</span>
           <UiSelect v-model="targetCollectionId" :options="collectionOptions" class="w-56" button-class="rounded border border-zinc-700 bg-zinc-900 px-2 py-1" />
-          <button class="ml-auto rounded bg-orange-500 px-4 py-1.5 font-medium text-white hover:bg-orange-600 disabled:opacity-40" :disabled="!curlText.trim()" @click="importCurl">Import</button>
+          <button class="ml-auto rounded bg-orange-500 px-4 py-1.5 font-medium text-on-accent hover:bg-orange-600 disabled:opacity-40" :disabled="!curlText.trim()" @click="importCurl">Import</button>
         </div>
         <p class="mt-3 text-xs text-zinc-500">Tip: you can also paste a cURL command straight into the URL bar of any request.</p>
       </template>

@@ -91,45 +91,64 @@ export function variableCompletion(getScope) {
   })
 }
 
-/** Syntax colors for the dark theme (Dracula). */
-export const draculaHighlightStyle = HighlightStyle.define([
-  { tag: [t.keyword, t.operatorKeyword, t.modifier, t.controlKeyword], color: '#ff79c6' },
-  { tag: [t.propertyName, t.attributeName], color: '#8be9fd' },
-  { tag: [t.string, t.special(t.string), t.regexp], color: '#f1fa8c' },
-  { tag: [t.number, t.bool, t.null, t.atom], color: '#bd93f9' },
-  { tag: [t.tagName, t.typeName, t.className], color: '#ff79c6' },
-  { tag: [t.function(t.variableName), t.function(t.propertyName)], color: '#50fa7b' },
-  { tag: [t.comment, t.meta], color: '#6272a4', fontStyle: 'italic' },
-  { tag: [t.punctuation, t.separator, t.bracket, t.operator], color: '#f8f8f2' },
-  { tag: t.invalid, color: '#ff5555' },
+/** Syntax colors, Ayu Dark (https://github.com/ayu-theme/ayu-colors). */
+export const ayuDarkHighlightStyle = HighlightStyle.define([
+  { tag: [t.keyword, t.operatorKeyword, t.modifier, t.controlKeyword], color: '#ff8f40' },
+  { tag: [t.propertyName, t.attributeName], color: '#59c2ff' },
+  { tag: [t.string, t.special(t.string)], color: '#aad94c' },
+  { tag: t.regexp, color: '#95e6cb' },
+  { tag: [t.number, t.bool, t.null, t.atom], color: '#d2a6ff' },
+  { tag: [t.tagName], color: '#39bae6' },
+  { tag: [t.typeName, t.className], color: '#59c2ff' },
+  { tag: [t.function(t.variableName), t.function(t.propertyName)], color: '#ffb454' },
+  { tag: [t.comment, t.meta], color: '#acb6bf8c', fontStyle: 'italic' },
+  { tag: [t.punctuation, t.separator, t.bracket], color: '#bfbdb6b3' },
+  { tag: t.operator, color: '#f29668' },
+  { tag: t.invalid, color: '#d95757' },
 ])
 
-/** Syntax colors for the light theme: muted, low-glare. */
-export const softLightHighlightStyle = HighlightStyle.define([
-  { tag: [t.keyword, t.operatorKeyword, t.modifier, t.controlKeyword], color: '#8a4f9e' },
-  { tag: [t.propertyName, t.attributeName], color: '#2f6690' },
-  { tag: [t.string, t.special(t.string), t.regexp], color: '#4d7c3a' },
-  { tag: [t.number, t.bool, t.null, t.atom], color: '#a65a3a' },
-  { tag: [t.tagName, t.typeName, t.className], color: '#8a4f9e' },
-  { tag: [t.function(t.variableName), t.function(t.propertyName)], color: '#2f6690' },
-  { tag: [t.comment, t.meta], color: '#8b919c', fontStyle: 'italic' },
-  { tag: [t.punctuation, t.separator, t.bracket, t.operator], color: '#5d6473' },
-  { tag: t.invalid, color: '#c0392b' },
+/** Syntax colors, Ayu Light. */
+export const ayuLightHighlightStyle = HighlightStyle.define([
+  { tag: [t.keyword, t.operatorKeyword, t.modifier, t.controlKeyword], color: '#fa8d3e' },
+  { tag: [t.propertyName, t.attributeName], color: '#399ee6' },
+  { tag: [t.string, t.special(t.string)], color: '#86b300' },
+  { tag: t.regexp, color: '#4cbf99' },
+  { tag: [t.number, t.bool, t.null, t.atom], color: '#a37acc' },
+  { tag: [t.tagName], color: '#55b4d4' },
+  { tag: [t.typeName, t.className], color: '#399ee6' },
+  { tag: [t.function(t.variableName), t.function(t.propertyName)], color: '#f2ae49' },
+  { tag: [t.comment, t.meta], color: '#787b8099', fontStyle: 'italic' },
+  { tag: [t.punctuation, t.separator, t.bracket], color: '#5c6166b3' },
+  { tag: t.operator, color: '#ed9366' },
+  { tag: t.invalid, color: '#e65050' },
 ])
 
 export const baseTheme = EditorView.theme(
   {
-    '&': { backgroundColor: 'transparent', color: 'var(--color-zinc-200)', fontSize: '13px' },
-    '.cm-content': { fontFamily: 'var(--font-mono)', caretColor: 'var(--color-orange-400)' },
+    // font family / size come from Settings (CSS variables set by lib/settings.js)
+    '&': { backgroundColor: 'transparent', color: 'var(--color-zinc-200)', fontSize: 'var(--editor-font-size, 13px)' },
+    '.cm-content': { fontFamily: 'var(--font-mono)', caretColor: 'var(--color-orange-500)' },
+    '.cm-cursor, .cm-dropCursor': { borderLeftColor: 'var(--color-orange-500)', borderLeftWidth: '2px' },
     '&.cm-focused': { outline: 'none' },
     '.cm-gutters': { backgroundColor: 'transparent', border: 'none', color: 'var(--color-zinc-600)' },
-    '.cm-activeLine, .cm-activeLineGutter': { backgroundColor: 'rgb(128 128 128 / 0.07)' },
-    '.cm-tooltip': { backgroundColor: 'var(--color-zinc-800)', border: '1px solid var(--color-zinc-700)', borderRadius: '6px' },
-    '.cm-tooltip-autocomplete > ul > li[aria-selected]': { backgroundColor: 'var(--color-orange-500)', color: 'white' },
-    '.cm-completionDetail': { color: 'var(--color-zinc-400)', marginLeft: '1em', fontStyle: 'normal' },
-    '.cm-selectionBackground, &.cm-focused .cm-selectionBackground': { backgroundColor: 'rgb(249 115 22 / 0.25) !important' },
+    '.cm-activeLineGutter': { backgroundColor: 'transparent', color: 'var(--color-zinc-400)' },
+    '.cm-activeLine': { backgroundColor: 'var(--cm-active-line)' },
+    '.cm-matchingBracket': { backgroundColor: 'transparent', outline: '1px solid var(--color-zinc-600)' },
+    '.cm-tooltip': { backgroundColor: 'var(--color-zinc-900)', border: '1px solid var(--color-zinc-700)', borderRadius: '5px' },
+    '.cm-tooltip-autocomplete > ul > li[aria-selected]': { backgroundColor: 'var(--color-zinc-800)', color: 'var(--color-zinc-100)' },
+    '.cm-completionDetail': { color: 'var(--color-zinc-500)', marginLeft: '1em', fontStyle: 'normal' },
+    '.cm-selectionBackground, &.cm-focused .cm-selectionBackground': { backgroundColor: 'var(--cm-selection) !important' },
+    '.cm-searchMatch': { backgroundColor: 'color-mix(in srgb, var(--color-orange-500) 25%, transparent)' },
   },
 )
+
+/** Multi-line editors: "font padding" from Settings = space above and below each line. */
+export const codeTheme = EditorView.theme({
+  '.cm-line': { paddingTop: 'var(--editor-line-pad, 2px)', paddingBottom: 'var(--editor-line-pad, 2px)' },
+  // gutters follow the line heights CodeMirror measures; only centre their contents
+  '.cm-gutterElement': { display: 'flex', alignItems: 'center' },
+  '.cm-lineNumbers .cm-gutterElement': { justifyContent: 'flex-end' },
+})
 
 export const singleLineTheme = EditorView.theme({
   '.cm-content': { padding: '0' },

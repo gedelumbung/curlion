@@ -117,32 +117,29 @@ const fmtTime = (ts) => new Date(ts).toLocaleString(undefined, { hour: '2-digit'
 
 <template>
   <aside class="flex h-full min-h-0 flex-col border-r border-zinc-800 bg-zinc-925" @click="menu = null">
-    <div class="flex gap-1 border-b border-zinc-800 p-2 text-xs">
-      <button class="inline-flex flex-1 items-center justify-center gap-1.5 rounded py-1.5" :class="tab === 'collections' ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'" @click="tab = 'collections'">
-        <Layers :size="14" /> Collections
-      </button>
-      <button class="inline-flex flex-1 items-center justify-center gap-1.5 rounded py-1.5" :class="tab === 'history' ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'" @click="tab = 'history'">
-        <Clock :size="14" /> History
+    <div class="flex border-b border-zinc-800 px-2 text-xs font-medium">
+      <button v-for="t in [{ id: 'collections', label: 'Collections', icon: Layers }, { id: 'history', label: 'History', icon: Clock }]" :key="t.id" class="sidebar-tab" :class="{ on: tab === t.id }" @click="tab = t.id">
+        <component :is="t.icon" :size="14" /> {{ t.label }}
       </button>
     </div>
 
     <template v-if="tab === 'collections'">
-      <div class="flex items-center gap-1 p-2">
-        <div class="flex flex-1 items-center gap-1.5 rounded border border-zinc-800 bg-zinc-900 px-2 focus-within:border-zinc-600">
-          <Search :size="13" class="text-zinc-500" />
-          <input v-model="state.search" placeholder="Search name or URL" class="w-full bg-transparent py-1 text-[13px] outline-none placeholder:text-zinc-600" />
+      <div class="flex items-center gap-0.5 px-2 py-2">
+        <div class="mr-1 flex h-7 flex-1 items-center gap-1.5 rounded-md border border-transparent bg-zinc-900 px-2 focus-within:border-zinc-700">
+          <Search :size="13" class="shrink-0 text-zinc-500" />
+          <input v-model="state.search" placeholder="Search" class="w-full bg-transparent text-[13px] outline-none placeholder:text-zinc-600" />
         </div>
-        <button class="rounded p-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100" title="New request" @click="addNewRequest"><FilePlus :size="15" /></button>
-        <button class="rounded p-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100" title="New collection" @click="newCollection"><Plus :size="16" /></button>
-        <button class="rounded p-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100" title="Import" @click="emit('import')"><Upload :size="15" /></button>
+        <button class="icon-btn" title="New request" @click="addNewRequest"><FilePlus :size="15" /></button>
+        <button class="icon-btn" title="New collection" @click="newCollection"><Plus :size="16" /></button>
+        <button class="icon-btn" title="Import" @click="emit('import')"><Upload :size="15" /></button>
       </div>
 
       <div class="min-h-0 flex-1 overflow-y-auto px-1 pb-4">
         <template v-for="col in state.collections" :key="col.id">
           <div v-if="colVisible(col)">
             <div
-              class="group flex cursor-pointer items-center gap-1.5 rounded px-1 py-1 text-[13px] font-medium text-zinc-300 hover:bg-zinc-800/60"
-              :class="{ 'bg-zinc-800 text-zinc-100': state.active?.requestId === collectionTabId(col.id) }"
+              class="tree-row group gap-1.5 px-1 font-medium text-zinc-300"
+              :class="{ active: state.active?.requestId === collectionTabId(col.id) }"
               title="Open collection overview"
               @click="openCollectionOverview(col.id)"
               @dblclick="beginColRename(col)"
@@ -194,7 +191,7 @@ const fmtTime = (ts) => new Date(ts).toLocaleString(undefined, { hour: '2-digit'
         <button v-if="state.history.length" class="hover:text-red-400" @click="askClearHistory">Clear</button>
       </div>
       <div class="min-h-0 flex-1 overflow-y-auto px-1 pb-4">
-        <button v-for="h in state.history" :key="h.id" class="flex w-full flex-col rounded px-2 py-1.5 text-left hover:bg-zinc-800/60" @click="openHistory(h)" @dblclick="openHistoryEntry(h, { preview: false })" :title="h.request ? 'Open this request as it was sent' : 'Open (older entry: method and URL only)'">
+        <button v-for="h in state.history" :key="h.id" class="flex w-full cursor-pointer flex-col rounded px-2 py-1.5 text-left hover:bg-zinc-800/60" @click="openHistory(h)" @dblclick="openHistoryEntry(h, { preview: false })" :title="h.request ? 'Open this request as it was sent' : 'Open (older entry: method and URL only)'">
           <span class="flex items-center gap-2 text-[13px]">
             <span class="font-mono text-[10px] font-bold" :class="methodColor[h.method]">{{ h.method }}</span>
             <span class="truncate text-zinc-300">{{ h.name }}</span>

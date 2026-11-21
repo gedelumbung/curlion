@@ -37,7 +37,7 @@ async function submit() {
       autocomplete="current-password"
       class="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 outline-none focus:border-zinc-500"
     />
-    <button type="submit" :disabled="busy" class="w-full rounded bg-orange-500 py-2 font-medium text-white hover:bg-orange-600 disabled:opacity-50">
+    <button type="submit" :disabled="busy" class="w-full rounded bg-orange-500 py-2 font-medium text-on-accent hover:bg-orange-600 disabled:opacity-50">
       {{ busy ? 'Signing in…' : 'Sign in' }}
     </button>
     <p v-if="error" class="text-red-400">{{ error }}</p>

@@ -176,7 +176,7 @@ onBeforeUnmount(() => {
           />
         </label>
         <p v-if="looksSecret && cloudEnabled" class="text-zinc-500">Looks like a secret: it is stored as your current value only, not shared.</p>
-        <button type="submit" class="inline-flex w-full items-center justify-center gap-1 rounded bg-orange-500 py-1.5 font-medium text-white hover:bg-orange-600"><Plus :size="13" /> Add variable</button>
+        <button type="submit" class="inline-flex w-full items-center justify-center gap-1 rounded bg-orange-500 py-1.5 font-medium text-on-accent hover:bg-orange-600"><Plus :size="13" /> Add variable</button>
       </form>
     </div>
   </div>
