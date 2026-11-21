@@ -1,5 +1,5 @@
 <script setup>
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { Activity, Cloud, CloudOff, Globe2, Info, Laptop, Loader2, LogOut, Monitor, Moon, Settings2, Sun, Zap } from 'lucide-vue-next'
 import { setDark, theme } from './lib/theme.js'
 import { vTopLayer } from './lib/topLayer.js'
@@ -7,6 +7,7 @@ import Sidebar from './components/Sidebar.vue'
 import RequestEditor from './components/RequestEditor.vue'
 import TabBar from './components/TabBar.vue'
 import CollectionOverview from './components/CollectionOverview.vue'
+import UiSelect from './components/UiSelect.vue'
 import CurlionLogo from './components/CurlionLogo.vue'
 import ResponseViewer from './components/ResponseViewer.vue'
 import EnvironmentModal from './components/EnvironmentModal.vue'
@@ -28,6 +29,11 @@ function openCollection(ctx) {
   modal.value = 'collection'
 }
 const sidebarOpen = ref(true)
+
+const envOptions = computed(() => [
+  { value: '', label: 'No environment', class: 'text-zinc-400' },
+  ...state.environments.filter((e) => !e.isGlobal).map((e) => ({ value: e.id, label: e.name })),
+])
 
 // Agent button: switch to Agent mode; open the setup when it is already selected or not running
 async function pickAgent() {
@@ -163,10 +169,15 @@ const syncLabel = {
         <!-- Environment switcher -->
         <div class="flex items-center rounded-md border border-zinc-700">
           <Globe2 :size="14" class="ml-2 text-zinc-500" />
-          <select :value="state.activeEnvId || ''" class="max-w-40 bg-transparent px-2 py-1 text-xs outline-none" @change="setActiveEnv($event.target.value || null)">
-            <option value="" class="bg-zinc-900">No environment</option>
-            <option v-for="e in state.environments.filter((x) => !x.isGlobal)" :key="e.id" :value="e.id" class="bg-zinc-900">{{ e.name }}</option>
-          </select>
+          <UiSelect
+            :model-value="state.activeEnvId || ''"
+            :options="envOptions"
+            class="w-40"
+            button-class="px-2 py-1 text-xs"
+            menu-width="14rem"
+            title="Active environment"
+            @update:model-value="setActiveEnv($event || null)"
+          />
           <button class="border-l border-zinc-700 p-1.5 text-zinc-400 hover:text-zinc-100" title="Manage environments" @click="modal = 'env'"><Settings2 :size="14" /></button>
         </div>
 

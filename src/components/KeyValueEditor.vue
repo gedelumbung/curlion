@@ -2,6 +2,7 @@
 <script setup>
 import { Paperclip, Plus, Trash2, Type } from 'lucide-vue-next'
 import VarInput from './VarInput.vue'
+import SuggestInput from './SuggestInput.vue'
 import { kv } from '../lib/model.js'
 import { fileStore } from '../lib/resolve.js'
 import { ref } from 'vue'
@@ -16,7 +17,6 @@ const props = defineProps({
   valuePlaceholder: { type: String, default: 'Value' },
 })
 const emit = defineEmits(['change'])
-const listId = 'kv-' + Math.random().toString(36).slice(2)
 const fileTick = ref(0) // re-render after picking files (fileStore is not reactive)
 
 const changed = () => emit('change')
@@ -46,9 +46,6 @@ function toggleType(row) {
 
 <template>
   <div class="text-sm">
-    <datalist :id="listId">
-      <option v-for="s in keySuggestions" :key="s" :value="s" />
-    </datalist>
     <table class="kv-table w-full table-fixed border-collapse">
       <thead>
         <tr class="text-left text-xs text-zinc-500">
@@ -65,12 +62,11 @@ function toggleType(row) {
             <input v-model="row.enabled" type="checkbox" class="accent-orange-500" @change="changed" />
           </td>
           <td class="px-2 py-1">
-            <input
+            <SuggestInput
               v-model="row.key"
-              :list="keySuggestions.length ? listId : undefined"
+              :suggestions="keySuggestions"
               :placeholder="keyPlaceholder"
-              class="w-full bg-transparent font-mono text-[13px] outline-none placeholder:text-zinc-600"
-              :class="{ 'opacity-50': row.enabled === false }"
+              :input-class="['w-full bg-transparent font-mono text-[13px] outline-none placeholder:text-zinc-600', { 'opacity-50': row.enabled === false }]"
               @input="changed"
             />
           </td>

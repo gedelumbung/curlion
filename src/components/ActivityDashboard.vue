@@ -3,6 +3,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { Download, Loader2, RefreshCw, Search } from 'lucide-vue-next'
 import Modal from './Modal.vue'
+import UiSelect from './UiSelect.vue'
 import { fetchAllActivity, state } from '../store.js'
 import { ACTIONS, actionColor, describeLog } from '../lib/activity.js'
 
@@ -132,28 +133,24 @@ function exportCsv() {
 
 const userOptions = computed(() => [...knownUsers.value.entries()].sort((a, b) => a[1].localeCompare(b[1])))
 const actionOptions = Object.entries(ACTIONS).filter(([k]) => !['ADD_MEMBER', 'REMOVE_MEMBER'].includes(k))
+const periodOptions = PERIODS.map((p) => ({ value: p.id, label: p.label }))
+const userSelectOptions = computed(() => [{ value: '', label: 'All users' }, ...userOptions.value.map(([id, email]) => ({ value: id, label: email }))])
+const collectionOptions = computed(() => [
+  { value: '', label: 'All collections' },
+  { value: '__account__', label: 'Sign-in / sign-out', class: 'text-zinc-400' },
+  ...state.collections.map((c) => ({ value: c.id, label: c.name })),
+])
+const activitySelectOptions = [{ value: '', label: 'All activity' }, ...actionOptions.map(([id, label]) => ({ value: id, label }))]
 </script>
 
 <template>
   <Modal title="Activity log" width="max-w-6xl" @close="emit('close')">
     <!-- Filters -->
     <div class="flex flex-wrap items-center gap-2 border-b border-zinc-800 px-4 py-3 text-xs">
-      <select v-model="period" class="rounded border border-zinc-700 bg-zinc-900 py-1.5 pl-2">
-        <option v-for="p in PERIODS" :key="p.id" :value="p.id">{{ p.label }}</option>
-      </select>
-      <select v-model="actorId" class="max-w-48 rounded border border-zinc-700 bg-zinc-900 py-1.5 pl-2">
-        <option value="">All users</option>
-        <option v-for="[id, email] in userOptions" :key="id" :value="id">{{ email }}</option>
-      </select>
-      <select v-model="collectionId" class="max-w-48 rounded border border-zinc-700 bg-zinc-900 py-1.5 pl-2">
-        <option value="">All collections</option>
-        <option value="__account__">Sign-in / sign-out</option>
-        <option v-for="c in state.collections" :key="c.id" :value="c.id">{{ c.name }}</option>
-      </select>
-      <select v-model="action" class="max-w-48 rounded border border-zinc-700 bg-zinc-900 py-1.5 pl-2">
-        <option value="">All activity</option>
-        <option v-for="[id, label] in actionOptions" :key="id" :value="id">{{ label }}</option>
-      </select>
+      <UiSelect v-model="period" :options="periodOptions" class="w-36" />
+      <UiSelect v-model="actorId" :options="userSelectOptions" class="w-48" menu-width="16rem" />
+      <UiSelect v-model="collectionId" :options="collectionOptions" class="w-48" menu-width="16rem" />
+      <UiSelect v-model="action" :options="activitySelectOptions" class="w-44" menu-width="14rem" />
       <div class="flex min-w-48 flex-1 items-center gap-1.5 rounded border border-zinc-700 bg-zinc-900 px-2 focus-within:border-zinc-500">
         <Search :size="13" class="text-zinc-500" />
         <input v-model="search" placeholder="Search name, collection or user" class="w-full bg-transparent py-1.5 outline-none placeholder:text-zinc-600" />

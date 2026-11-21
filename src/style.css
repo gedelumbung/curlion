@@ -110,15 +110,13 @@ body {
   @apply bg-zinc-950 text-zinc-200 antialiased;
 }
 
-/* Custom chevron so the arrow sits a bit inside the edge (native one hugs the right border).
-   Unlayered on purpose so it wins over px-* utilities. */
-select {
-  appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23a1a1aa' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 0.6rem center;
-  background-size: 12px;
-  padding-right: 1.9rem;
+/* Dropdown lists of UiSelect / SuggestInput: shown as popovers in the top layer.
+   Reset the browser's default popover box so the list sits where it is placed. */
+.ui-select-menu {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  z-index: 1000; /* fallback when the Popover API is unavailable */
 }
 
 /* Modals and popups live in the browser top layer (<dialog>.showModal(), popover).

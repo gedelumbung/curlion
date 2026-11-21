@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { ChevronDown, Code2, Download, Loader2, Plus, Save, Send, Trash2, Wand2 } from 'lucide-vue-next'
 import VarInput from './VarInput.vue'
+import UiSelect from './UiSelect.vue'
 import KeyValueEditor from './KeyValueEditor.vue'
 import CodeEditor from './CodeEditor.vue'
 import SamplesPanel from './SamplesPanel.vue'
@@ -29,6 +30,19 @@ watch(
   { deep: true },
 )
 const dirty = computed(() => !!req.value && isDirty(req.value.id))
+
+const methodOptions = METHODS.map((m) => ({ value: m, label: m, class: `font-mono font-semibold ${methodColor[m]}` }))
+const AUTH_TYPES = [
+  { value: 'none', label: 'No Auth' },
+  { value: 'bearer', label: 'Bearer Token' },
+  { value: 'basic', label: 'Basic Auth' },
+  { value: 'apikey', label: 'API Key' },
+]
+const APIKEY_IN = [
+  { value: 'header', label: 'Header' },
+  { value: 'query', label: 'Query Params' },
+]
+const RAW_TYPES = ['json', 'text', 'xml', 'html'].map((v) => ({ value: v, label: v === 'text' ? 'Text' : v.toUpperCase(), class: 'text-sky-400' }))
 
 // ---- URL <-> Params two-way sync -----------------------------------------
 function onUrlInput(val) {
@@ -145,9 +159,7 @@ defineExpose({ applyCurl })
     <!-- URL bar -->
     <div class="flex items-stretch gap-2 px-4 py-2">
       <div class="flex min-w-0 flex-1 items-stretch rounded-md border border-zinc-700 bg-zinc-900 focus-within:border-zinc-500">
-        <select v-model="req.method" class="rounded-l-md border-r border-zinc-700 bg-zinc-900 px-2 text-sm font-semibold outline-none" :class="methodColor[req.method]">
-          <option v-for="m in METHODS" :key="m" :value="m" :class="methodColor[m]">{{ m }}</option>
-        </select>
+        <UiSelect v-model="req.method" :options="methodOptions" class="w-28 shrink-0" button-class="rounded-l-md border-r border-zinc-700 bg-zinc-900 px-3 text-sm font-semibold" />
         <VarInput
           :model-value="req.url"
           class="flex-1 self-center px-3 py-2"
@@ -206,12 +218,7 @@ defineExpose({ applyCurl })
       <div v-else-if="tab === 'auth'" class="grid gap-4 px-4 py-2 md:grid-cols-[200px_1fr]">
         <div>
           <label class="mb-1 block text-xs text-zinc-500">Type</label>
-          <select v-model="req.auth.type" class="w-full rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm">
-            <option value="none">No Auth</option>
-            <option value="bearer">Bearer Token</option>
-            <option value="basic">Basic Auth</option>
-            <option value="apikey">API Key</option>
-          </select>
+          <UiSelect v-model="req.auth.type" :options="AUTH_TYPES" class="w-full" button-class="rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm" />
         </div>
         <div class="space-y-3 text-sm">
           <p v-if="req.auth.type === 'none'" class="pt-5 text-zinc-500">This request does not use any authorization.</p>
@@ -231,10 +238,7 @@ defineExpose({ applyCurl })
             <label class="block text-xs text-zinc-500">Value</label>
             <VarInput v-model="req.auth.apikey.value" class="field" />
             <label class="block text-xs text-zinc-500">Add to</label>
-            <select v-model="req.auth.apikey.in" class="rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5">
-              <option value="header">Header</option>
-              <option value="query">Query Params</option>
-            </select>
+            <UiSelect v-model="req.auth.apikey.in" :options="APIKEY_IN" class="w-36" />
           </template>
         </div>
       </div>
@@ -255,12 +259,7 @@ defineExpose({ applyCurl })
             <span :class="req.body.mode === m.id ? 'text-zinc-100' : 'text-zinc-400'">{{ m.label }}</span>
           </label>
           <template v-if="req.body.mode === 'raw'">
-            <select v-model="req.body.rawType" class="rounded border border-zinc-700 bg-zinc-900 px-2 py-0.5 text-xs text-sky-400">
-              <option value="json">JSON</option>
-              <option value="text">Text</option>
-              <option value="xml">XML</option>
-              <option value="html">HTML</option>
-            </select>
+            <UiSelect v-model="req.body.rawType" :options="RAW_TYPES" class="w-24" button-class="rounded border border-zinc-700 bg-zinc-900 px-2 py-0.5 text-xs" />
             <button v-if="req.body.rawType === 'json'" class="ml-auto inline-flex items-center gap-1 text-xs text-zinc-400 hover:text-zinc-100" @click="beautify">
               <Wand2 :size="13" /> Beautify
             </button>

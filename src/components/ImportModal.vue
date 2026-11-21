@@ -1,7 +1,8 @@
 <script setup>
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { FileJson, Terminal } from 'lucide-vue-next'
 import Modal from './Modal.vue'
+import UiSelect from './UiSelect.vue'
 import { importPostman } from '../lib/postman.js'
 import { parseCurl } from '../lib/curl.js'
 import { addCollection, addEnvironment, addRequest, createCollection, openRequest, state, toast } from '../store.js'
@@ -14,6 +15,10 @@ const curlText = ref('')
 const pasted = ref('')
 const dragging = ref(false)
 const targetCollectionId = ref(state.active?.collectionId || state.collections[0]?.id || '__new__')
+const collectionOptions = computed(() => [
+  ...state.collections.map((c) => ({ value: c.id, label: c.name })),
+  { value: '__new__', label: '+ New collection', class: 'text-orange-400' },
+])
 
 function importJson(text) {
   error.value = ''
@@ -99,10 +104,7 @@ function importCurl() {
         <textarea v-model="curlText" rows="9" class="w-full rounded border border-zinc-700 bg-zinc-900 p-2 font-mono text-xs outline-none focus:border-zinc-500" placeholder="curl -X POST 'https://api.example.com/login' -H 'Content-Type: application/json' -d '{&quot;email&quot;:&quot;a@b.c&quot;}'"></textarea>
         <div class="mt-2 flex items-center gap-2">
           <span class="text-xs text-zinc-500">Add to</span>
-          <select v-model="targetCollectionId" class="rounded border border-zinc-700 bg-zinc-900 px-2 py-1">
-            <option v-for="c in state.collections" :key="c.id" :value="c.id">{{ c.name }}</option>
-            <option value="__new__">+ New collection</option>
-          </select>
+          <UiSelect v-model="targetCollectionId" :options="collectionOptions" class="w-56" button-class="rounded border border-zinc-700 bg-zinc-900 px-2 py-1" />
           <button class="ml-auto rounded bg-orange-500 px-4 py-1.5 font-medium text-white hover:bg-orange-600 disabled:opacity-40" :disabled="!curlText.trim()" @click="importCurl">Import</button>
         </div>
         <p class="mt-3 text-xs text-zinc-500">Tip: you can also paste a cURL command straight into the URL bar of any request.</p>

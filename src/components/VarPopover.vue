@@ -7,6 +7,7 @@ import { Eye, EyeOff, Lock, Plus, RotateCcw, X } from 'lucide-vue-next'
 import { activeEnv, addVariable, closeVarPopover, cloudEnabled, globalEnv, scope, setCurrentValue, state, touchEnvironment } from '../store.js'
 import { DYNAMIC_DESCRIPTIONS, DYNAMIC_VARS } from '../lib/variables.js'
 import { vTopLayer } from '../lib/topLayer.js'
+import UiSelect from './UiSelect.vue'
 
 const card = ref(null)
 const pos = ref({ left: 0, top: 0 })
@@ -31,6 +32,9 @@ const inputType = computed(() => (variable.value?.isSecret && !reveal.value ? 'p
 
 // ---- add an undefined variable ---------------------------------------------
 const targets = computed(() => [activeEnv.value, globalEnv.value].filter(Boolean))
+const targetOptions = computed(() =>
+  targets.value.map((t) => ({ value: t.id, label: t.isGlobal ? 'Globals' : t.name, hint: t.isGlobal ? 'only you' : cloudEnabled ? 'shared' : '' })),
+)
 const targetId = ref(activeEnv.value?.id || globalEnv.value?.id)
 const newValue = ref('')
 const looksSecret = computed(() => /token|secret|password|key/i.test(name.value || ''))
@@ -159,9 +163,7 @@ onBeforeUnmount(() => {
         <p class="text-zinc-400">This variable is not defined in the active environment or Globals.</p>
         <label class="block">
           <span class="mb-1 block text-zinc-400">Add to</span>
-          <select v-model="targetId" class="w-full rounded border border-zinc-700 bg-zinc-900 py-1.5 pl-2 text-zinc-100">
-            <option v-for="t in targets" :key="t.id" :value="t.id">{{ t.isGlobal ? 'Globals (only you)' : t.name + (cloudEnabled ? ' (shared)' : '') }}</option>
-          </select>
+          <UiSelect v-model="targetId" :options="targetOptions" class="w-full" button-class="rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-zinc-100" />
         </label>
         <label class="block">
           <span class="mb-1 block text-zinc-400">Value</span>
