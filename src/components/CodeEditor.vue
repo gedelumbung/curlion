@@ -21,9 +21,9 @@ import { highlightSelectionMatches, searchKeymap } from '@codemirror/search'
 import { json } from '@codemirror/lang-json'
 import { xml } from '@codemirror/lang-xml'
 import { html } from '@codemirror/lang-html'
-import { ayuDarkHighlightStyle, ayuLightHighlightStyle, baseTheme, codeTheme, refreshVars, variableClick, variableCompletion, variableHighlighter } from '../lib/cm.js'
+import { baseTheme, highlightStyleFor, codeTheme, refreshVars, variableClick, variableCompletion, variableHighlighter } from '../lib/cm.js'
 import { openVarPopover, scope } from '../store.js'
-import { theme } from '../lib/theme.js'
+import { palette, theme } from '../lib/theme.js'
 import { indentString, settings } from '../lib/settings.js'
 
 const props = defineProps({
@@ -40,7 +40,7 @@ let view = null
 const langConf = new Compartment()
 const wrapConf = new Compartment()
 const highlightConf = new Compartment()
-const highlightExt = (t) => syntaxHighlighting(t === 'light' ? ayuLightHighlightStyle : ayuDarkHighlightStyle)
+const highlightExt = () => syntaxHighlighting(highlightStyleFor(palette.value, theme.value))
 // Settings: indentation (spaces/tabs, size) and auto-closing quotes/brackets
 const indentConf = new Compartment()
 const indentExt = () => [indentUnit.of(indentString()), EditorState.tabSize.of(settings.indentSize)]
@@ -78,7 +78,7 @@ onMounted(() => {
         setup,
         keymap.of([indentWithTab]),
         indentConf.of(indentExt()),
-        highlightConf.of(highlightExt(theme.value)),
+        highlightConf.of(highlightExt()),
         baseTheme,
         codeTheme,
         langConf.of(langExt(props.language)),
@@ -109,7 +109,7 @@ watch(
   () => props.wrap,
   (w) => view?.dispatch({ effects: wrapConf.reconfigure(w ? EditorView.lineWrapping : []) }),
 )
-watch(theme, (t) => view?.dispatch({ effects: highlightConf.reconfigure(highlightExt(t)) }))
+watch([theme, palette], () => view?.dispatch({ effects: highlightConf.reconfigure(highlightExt()) }))
 watch(
   () => [settings.indentType, settings.indentSize],
   () => view?.dispatch({ effects: indentConf.reconfigure(indentExt()) }),

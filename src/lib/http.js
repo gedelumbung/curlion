@@ -40,14 +40,54 @@ function filenameFrom(headers, url) {
   return 'response.bin'
 }
 
+/**
+ * Save a response as a file. In Chrome / Edge this opens the native "Save as" dialog
+ * (File System Access API): unlike an <a download> click after an await, it is not
+ * subject to Chrome's "automatic downloads" blocking. It needs a recent user gesture,
+ * which a click on Send (and a quick response) or on "Download again" provides.
+ * @returns {Promise<'saved'|'downloaded'|'cancelled'>}
+ */
+export async function saveResponseFile(blobOrUrl, name, contentType = '') {
+  const activeGesture = navigator.userActivation ? navigator.userActivation.isActive : false
+  if (typeof window.showSaveFilePicker === 'function' && activeGesture) {
+    try {
+      const handle = await window.showSaveFilePicker({ suggestedName: name })
+      const blob = typeof blobOrUrl === 'string' ? await (await fetch(blobOrUrl)).blob() : blobOrUrl
+      const writable = await handle.createWritable()
+      await writable.write(blob)
+      await writable.close()
+      return 'saved'
+    } catch (e) {
+      if (e.name === 'AbortError') return 'cancelled'
+      // SecurityError / NotAllowedError: fall back to a regular download
+    }
+  }
+  downloadBlob(blobOrUrl, name)
+  return 'downloaded'
+}
+
+/** Save a blob (or an existing blob: URL) as a file. */
 export function downloadBlob(blob, name) {
+  const href = typeof blob === 'string' ? blob : URL.createObjectURL(blob)
   const a = document.createElement('a')
-  a.href = URL.createObjectURL(blob)
+  a.href = href
   a.download = name
   document.body.appendChild(a)
   a.click()
   a.remove()
-  setTimeout(() => URL.revokeObjectURL(a.href), 10_000)
+  if (typeof blob !== 'string') setTimeout(() => URL.revokeObjectURL(href), 10_000)
+}
+
+const EXT_BY_TYPE = [
+  [/json/, 'json'], [/xml/, 'xml'], [/html/, 'html'], [/csv/, 'csv'], [/javascript/, 'js'], [/css/, 'css'],
+  [/text\/plain/, 'txt'], [/pdf/, 'pdf'], [/zip/, 'zip'], [/png/, 'png'], [/jpe?g/, 'jpg'], [/gif/, 'gif'],
+  [/webp/, 'webp'], [/svg/, 'svg'], [/gzip/, 'gz'],
+]
+/** "1" + application/json -> "1.json" (Safari and Firefox keep a bare name as-is). */
+function withExtension(name, contentType) {
+  if (/\.[a-z0-9]{1,8}$/i.test(name)) return name
+  const ext = EXT_BY_TYPE.find(([re]) => re.test(contentType || ''))?.[1]
+  return ext ? `${name}.${ext}` : name
 }
 
 // ---- Local network access (Direct mode) ----------------------------------------
@@ -228,9 +268,12 @@ export async function sendRequest(resolved, opts = {}) {
 
   if (download || isBinaryResponse(hdrs)) {
     result.binary = true
-    result.fileName = filenameFrom(hdrs, resolved.url)
-    downloadBlob(blob, result.fileName)
-    if (/^image\//.test(result.contentType)) result.previewUrl = URL.createObjectURL(blob)
+    result.fileName = withExtension(filenameFrom(hdrs, resolved.url), result.contentType)
+    // kept so the response pane can offer "Download again" (a click there is a real user
+    // gesture, which browsers never block, unlike this download after an await)
+    result.downloadUrl = URL.createObjectURL(blob)
+    result.saved = download ? await saveResponseFile(result.downloadUrl, result.fileName) : (downloadBlob(result.downloadUrl, result.fileName), 'downloaded')
+    if (/^image\//.test(result.contentType)) result.previewUrl = result.downloadUrl
     return result
   }
 

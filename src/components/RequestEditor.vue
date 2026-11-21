@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { ChevronDown, Code2, Download, Loader2, Play, Plug, Plus, Save, Send, Trash2, Unplug, Wand2 } from 'lucide-vue-next'
 import VarInput from './VarInput.vue'
 import UiSelect from './UiSelect.vue'
@@ -130,8 +130,58 @@ function applyCurl(text) {
   tab.value = parsed.body.mode !== 'none' ? 'body' : parsed.headers.length ? 'headers' : 'params'
 }
 
+// "Send and Download" menu: closes on a click elsewhere or Escape (not on mouse leave,
+// which closed it while the pointer crossed the gap under the button)
+const sendMenuBtn = ref(null)
+const sendMenuEl = ref(null)
+// Menu item under the pointer, by position (works even when an overlay sits on top)
+function itemAt(e) {
+  return [...(sendMenuEl.value?.querySelectorAll('[role=menuitem]') || [])].find((el) => {
+    const r = el.getBoundingClientRect()
+    return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom
+  })
+}
+// An overlay on top of the menu also takes the hover (and its cursor): mirror both here.
+function onDocMove(e) {
+  const item = itemAt(e)
+  const covered = item && !item.contains(e.target)
+  for (const el of sendMenuEl.value?.querySelectorAll('[role=menuitem]') || []) el.classList.toggle('menu-hover', covered && el === item)
+  document.documentElement.style.cursor = covered ? 'pointer' : ''
+}
+function onDocPointer(e) {
+  if (sendMenuEl.value?.contains(e.target) || sendMenuBtn.value?.contains(e.target)) return
+  // The pointer is over a menu item but another element received the event (an overlay
+  // injected by a browser extension, for example): still treat it as a click on the item.
+  const item = itemAt(e)
+  if (item) {
+    console.warn('[Curlion] click on "Send and Download" was intercepted by', e.target)
+    e.preventDefault()
+    e.stopPropagation()
+    doSend(true)
+    return
+  }
+  sendMenu.value = false
+}
+function onDocKey(e) {
+  if (e.key === 'Escape') sendMenu.value = false
+}
+watch(sendMenu, (open) => {
+  const fn = open ? document.addEventListener : document.removeEventListener
+  fn.call(document, 'pointerdown', onDocPointer, true)
+  fn.call(document, 'keydown', onDocKey, true)
+  fn.call(document, 'pointermove', onDocMove, true)
+  if (!open) document.documentElement.style.cursor = ''
+})
+onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', onDocPointer, true)
+  document.removeEventListener('keydown', onDocKey, true)
+  document.removeEventListener('pointermove', onDocMove, true)
+  document.documentElement.style.cursor = ''
+})
+
 function doSend(download = false) {
   sendMenu.value = false
+  if (download) toast('Sending… the response will be saved as a file', 'info', 2000)
   send({ download })
 }
 
@@ -297,11 +347,18 @@ defineExpose({ applyCurl })
         <button v-else class="inline-flex items-center gap-2 bg-zinc-700 px-4 text-sm font-semibold text-zinc-100 hover:bg-zinc-600" :class="protocol === 'http' ? 'rounded-l-md' : 'rounded-md'" @click="cancel()">
           <Loader2 :size="15" class="animate-spin" /> Cancel
         </button>
-        <button v-if="protocol === 'http'" class="rounded-r-md border-l border-orange-700 bg-orange-500 px-1.5 text-on-accent hover:bg-orange-600" @click="sendMenu = !sendMenu">
+        <button
+          v-if="protocol === 'http'"
+          ref="sendMenuBtn"
+          class="rounded-r-md border-l border-orange-700 bg-orange-500 px-1.5 text-on-accent hover:bg-orange-600"
+          title="More send options"
+          :aria-expanded="sendMenu"
+          @click="sendMenu = !sendMenu"
+        >
           <ChevronDown :size="15" />
         </button>
-        <div v-if="sendMenu" class="absolute top-full right-0 z-20 mt-1 w-48 rounded-md border border-zinc-700 bg-zinc-800 py-1 shadow-xl" @mouseleave="sendMenu = false">
-          <button class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-zinc-700" @click="doSend(true)">
+        <div v-if="sendMenu" ref="sendMenuEl" role="menu" class="absolute top-full right-0 z-50 mt-1 w-48 rounded-md border border-zinc-700 bg-zinc-800 py-1 shadow-xl">
+          <button role="menuitem" class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-zinc-700" @click="doSend(true)">
             <Download :size="14" /> Send and Download
           </button>
         </div>

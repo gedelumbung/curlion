@@ -91,37 +91,52 @@ export function variableCompletion(getScope) {
   })
 }
 
-/** Syntax colors, Ayu Dark (https://github.com/ayu-theme/ayu-colors). */
-export const ayuDarkHighlightStyle = HighlightStyle.define([
-  { tag: [t.keyword, t.operatorKeyword, t.modifier, t.controlKeyword], color: '#ff8f40' },
-  { tag: [t.propertyName, t.attributeName], color: '#59c2ff' },
-  { tag: [t.string, t.special(t.string)], color: '#aad94c' },
-  { tag: t.regexp, color: '#95e6cb' },
-  { tag: [t.number, t.bool, t.null, t.atom], color: '#d2a6ff' },
-  { tag: [t.tagName], color: '#39bae6' },
-  { tag: [t.typeName, t.className], color: '#59c2ff' },
-  { tag: [t.function(t.variableName), t.function(t.propertyName)], color: '#ffb454' },
-  { tag: [t.comment, t.meta], color: '#acb6bf8c', fontStyle: 'italic' },
-  { tag: [t.punctuation, t.separator, t.bracket], color: '#bfbdb6b3' },
-  { tag: t.operator, color: '#f29668' },
-  { tag: t.invalid, color: '#d95757' },
-])
+/** CodeMirror highlight style from a palette's syntax colours. */
+function syntaxStyle(c) {
+  return HighlightStyle.define([
+    { tag: [t.keyword, t.operatorKeyword, t.modifier, t.controlKeyword], color: c.keyword },
+    { tag: [t.propertyName, t.attributeName], color: c.property },
+    { tag: [t.string, t.special(t.string)], color: c.string },
+    { tag: t.regexp, color: c.regexp },
+    { tag: [t.number, t.bool, t.null, t.atom], color: c.number },
+    { tag: [t.tagName], color: c.tag },
+    { tag: [t.typeName, t.className], color: c.type },
+    { tag: [t.function(t.variableName), t.function(t.propertyName)], color: c.func },
+    { tag: [t.comment, t.meta], color: c.comment, fontStyle: 'italic' },
+    { tag: [t.punctuation, t.separator, t.bracket], color: c.punct },
+    { tag: t.operator, color: c.operator },
+    { tag: t.invalid, color: c.invalid },
+  ])
+}
 
-/** Syntax colors, Ayu Light. */
-export const ayuLightHighlightStyle = HighlightStyle.define([
-  { tag: [t.keyword, t.operatorKeyword, t.modifier, t.controlKeyword], color: '#fa8d3e' },
-  { tag: [t.propertyName, t.attributeName], color: '#399ee6' },
-  { tag: [t.string, t.special(t.string)], color: '#86b300' },
-  { tag: t.regexp, color: '#4cbf99' },
-  { tag: [t.number, t.bool, t.null, t.atom], color: '#a37acc' },
-  { tag: [t.tagName], color: '#55b4d4' },
-  { tag: [t.typeName, t.className], color: '#399ee6' },
-  { tag: [t.function(t.variableName), t.function(t.propertyName)], color: '#f2ae49' },
-  { tag: [t.comment, t.meta], color: '#787b8099', fontStyle: 'italic' },
-  { tag: [t.punctuation, t.separator, t.bracket], color: '#5c6166b3' },
-  { tag: t.operator, color: '#ed9366' },
-  { tag: t.invalid, color: '#e65050' },
-])
+/** Syntax colours per palette and mode (see PALETTES in lib/theme.js). */
+const SYNTAX = {
+  ayu: {
+    // https://github.com/ayu-theme/ayu-colors
+    dark: { keyword: '#ff8f40', property: '#59c2ff', string: '#aad94c', regexp: '#95e6cb', number: '#d2a6ff', tag: '#39bae6', type: '#59c2ff', func: '#ffb454', comment: '#acb6bf8c', punct: '#bfbdb6b3', operator: '#f29668', invalid: '#d95757' },
+    light: { keyword: '#fa8d3e', property: '#399ee6', string: '#86b300', regexp: '#4cbf99', number: '#a37acc', tag: '#55b4d4', type: '#399ee6', func: '#f2ae49', comment: '#787b8099', punct: '#5c6166b3', operator: '#ed9366', invalid: '#e65050' },
+  },
+  monokai: {
+    dark: { keyword: '#f92672', property: '#66d9ef', string: '#e6db74', regexp: '#e6db74', number: '#ae81ff', tag: '#f92672', type: '#66d9ef', func: '#a6e22e', comment: '#75715e', punct: '#f8f8f2b3', operator: '#f92672', invalid: '#f92672' },
+    light: { keyword: '#e14775', property: '#1c8ca8', string: '#cc7a0a', regexp: '#cc7a0a', number: '#7058be', tag: '#e14775', type: '#1c8ca8', func: '#269d69', comment: '#a59fa0', punct: '#29242ab3', operator: '#e14775', invalid: '#e14775' },
+  },
+  dracula: {
+    dark: { keyword: '#ff79c6', property: '#8be9fd', string: '#f1fa8c', regexp: '#ff5555', number: '#bd93f9', tag: '#ff79c6', type: '#8be9fd', func: '#50fa7b', comment: '#6272a4', punct: '#f8f8f2b3', operator: '#ff79c6', invalid: '#ff5555' },
+    light: { keyword: '#a3144d', property: '#036a96', string: '#846e15', regexp: '#cb3a2a', number: '#644ac9', tag: '#a3144d', type: '#036a96', func: '#14710a', comment: '#6c664b', punct: '#1f1f1fb3', operator: '#a3144d', invalid: '#cb3a2a' },
+  },
+  tokyo: {
+    dark: { keyword: '#bb9af7', property: '#7aa2f7', string: '#9ece6a', regexp: '#b4f9f8', number: '#ff9e64', tag: '#f7768e', type: '#2ac3de', func: '#7aa2f7', comment: '#565f89', punct: '#a9b1d6b3', operator: '#89ddff', invalid: '#f7768e' },
+    light: { keyword: '#9854f1', property: '#2e7de9', string: '#587539', regexp: '#2e5857', number: '#b15c00', tag: '#f52a65', type: '#007197', func: '#2e7de9', comment: '#848cb5', punct: '#3760bfb3', operator: '#006a83', invalid: '#f52a65' },
+  },
+}
+const styleCache = new Map()
+
+/** Highlight style for a palette ('ayu' | 'monokai' | 'dracula' | 'tokyo') and mode ('dark' | 'light'). */
+export function highlightStyleFor(palette, mode) {
+  const key = `${palette}:${mode}`
+  if (!styleCache.has(key)) styleCache.set(key, syntaxStyle((SYNTAX[palette] || SYNTAX.ayu)[mode === 'light' ? 'light' : 'dark']))
+  return styleCache.get(key)
+}
 
 export const baseTheme = EditorView.theme(
   {

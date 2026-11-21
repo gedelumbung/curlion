@@ -1,11 +1,12 @@
 <script setup>
 import { computed, ref } from 'vue'
-import { AlertTriangle, Check, Copy, FileDown, Save, WrapText } from 'lucide-vue-next'
+import { AlertTriangle, Check, Copy, Download, FileDown, Save, WrapText } from 'lucide-vue-next'
 import CodeEditor from './CodeEditor.vue'
 import JsonTree from './JsonTree.vue'
 import { activeError, activeLoading, activeRequest, activeResponse, addSampleNow, isHistoryId, state, toast } from '../store.js'
 import { kv, newSample } from '../lib/model.js'
 import { copyText, formatSize, statusColor } from '../lib/ui.js'
+import { saveResponseFile } from '../lib/http.js'
 import { indentString } from '../lib/settings.js'
 
 const res = activeResponse
@@ -25,6 +26,12 @@ const pretty = computed(() => {
 })
 
 const wrapVar = (name) => '{' + '{' + name + '}' + '}'
+
+async function saveAgain() {
+  const r = res.value
+  const how = await saveResponseFile(r.downloadUrl, r.fileName)
+  if (how !== 'cancelled') toast(how === 'saved' ? `Saved ${r.fileName}` : `Downloading ${r.fileName}…`, 'success', 2000)
+}
 
 async function copyBody() {
   await copyText(view.value === 'raw' ? res.value.body : pretty.value)
@@ -84,8 +91,16 @@ function saveAsSample() {
       <template v-else-if="tab === 'body'">
         <div v-if="res.binary" class="flex flex-col items-center gap-3 p-6 text-sm text-zinc-400">
           <FileDown :size="32" class="text-orange-400" />
-          <p>Binary response downloaded as <span class="font-mono text-zinc-200">{{ res.fileName }}</span></p>
-          <p class="text-xs text-zinc-600">{{ res.contentType }}</p>
+          <p>Response saved as <span class="font-mono text-zinc-200">{{ res.fileName }}</span></p>
+          <p class="text-xs text-zinc-600">{{ res.contentType }} · {{ formatSize(res.size) }}</p>
+          <button
+            v-if="res.downloadUrl"
+            class="inline-flex items-center gap-1.5 rounded-md bg-orange-500 px-3 py-1.5 text-xs font-semibold text-on-accent hover:bg-orange-600"
+            @click="saveAgain"
+          >
+            <Download :size="13" /> Save file…
+          </button>
+          <p v-if="res.saved === 'cancelled'" class="text-xs text-zinc-600">Save was cancelled.</p>
           <img v-if="res.previewUrl" :src="res.previewUrl" class="max-h-64 rounded border border-zinc-800" alt="Response preview" />
         </div>
         <div v-else class="flex h-full flex-col">

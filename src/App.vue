@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { Activity, CloudOff, Globe2, Info, Laptop, Loader2, LogOut, Monitor, Moon, Settings2, SlidersHorizontal, Sun, Zap } from 'lucide-vue-next'
-import { setDark, theme } from './lib/theme.js'
+import { setDark, theme, themeLabel } from './lib/theme.js'
 import { vTopLayer } from './lib/topLayer.js'
 import Sidebar from './components/Sidebar.vue'
 import RequestEditor from './components/RequestEditor.vue'
@@ -194,7 +194,7 @@ const syncLabel = {
         <span class="mx-1 h-5 w-px bg-zinc-800"></span>
 
         <button v-if="cloudEnabled && state.user" class="icon-btn" title="Activity log: who changed what" @click="modal = 'activity'"><Activity :size="15" /></button>
-        <button class="icon-btn" :title="theme === 'dark' ? 'Switch to Ayu Light' : 'Switch to Ayu Dark'" @click="setDark(theme !== 'dark')">
+        <button class="icon-btn" :title="`Switch to ${themeLabel(theme === 'dark' ? 'light' : 'dark')}`" @click="setDark(theme !== 'dark')">
           <Sun v-if="theme === 'dark'" :size="15" />
           <Moon v-else :size="15" />
         </button>

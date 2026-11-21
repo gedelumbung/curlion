@@ -777,7 +777,11 @@ export async function send({ download = false } = {}) {
     if (state.mode === 'agent') state.agent.status = 'online'
     res.at = Date.now()
     res.extracted = runExtract(req, res)
+    const prev = state.responses[id]?.downloadUrl
+    if (prev && prev !== res.downloadUrl) URL.revokeObjectURL(prev)
     state.responses[id] = res
+    if (res.saved === 'saved') toast(`Saved ${res.fileName}`, 'success', 2500)
+    else if (res.saved === 'downloaded') toast(`Downloading ${res.fileName}…`, 'success', 2500)
     addHistory(req, resolved, res)
   } catch (err) {
     if (err.name !== 'AbortError') {

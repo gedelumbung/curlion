@@ -6,7 +6,7 @@ import Modal from './Modal.vue'
 import UiSelect from './UiSelect.vue'
 import CodeEditor from './CodeEditor.vue'
 import { DEFAULTS, FONT_FAMILIES, indentString, resetSettings, settings } from '../lib/settings.js'
-import { setDark, theme } from '../lib/theme.js'
+import { PALETTES, palette, setTheme, theme } from '../lib/theme.js'
 
 const emit = defineEmits(['close'])
 
@@ -27,11 +27,31 @@ const isDefault = computed(() => Object.entries(DEFAULTS).every(([k, v]) => sett
       <section>
         <h3 class="settings-heading">Appearance</h3>
       </section>
-      <div class="settings-row">
+      <div class="pt-1 pb-3">
         <span>Theme</span>
-        <div class="segmented">
-          <button :class="{ on: theme === 'dark' }" @click="setDark(true)">Ayu Dark</button>
-          <button :class="{ on: theme === 'light' }" @click="setDark(false)">Ayu Light</button>
+        <div v-for="mode in ['dark', 'light']" :key="mode" class="mt-2">
+          <p class="mb-1.5 text-[11px] font-medium tracking-wide text-zinc-500 uppercase">{{ mode }}</p>
+          <div class="grid grid-cols-4 gap-2">
+            <button
+              v-for="p in PALETTES"
+              :key="p.id + mode"
+              class="theme-card"
+              :class="{ on: palette === p.id && theme === mode }"
+              :aria-pressed="palette === p.id && theme === mode"
+              :title="p[mode].label"
+              @click="setTheme(p.id, mode)"
+            >
+              <span class="theme-swatch" :style="{ background: p[mode].swatch[0], color: p[mode].swatch[1] }">
+                <span class="theme-lines">
+                  <i :style="{ background: p[mode].swatch[3] }"></i>
+                  <i :style="{ background: p[mode].swatch[4], width: '70%' }"></i>
+                  <i :style="{ background: p[mode].swatch[5], width: '45%' }"></i>
+                </span>
+                <span class="theme-accent" :style="{ background: p[mode].swatch[2] }"></span>
+              </span>
+              <span class="theme-name">{{ p[mode].label }}</span>
+            </button>
+          </div>
         </div>
       </div>
       <div class="settings-row">
@@ -109,6 +129,62 @@ const isDefault = computed(() => Object.entries(DEFAULTS).every(([k, v]) => sett
 </template>
 
 <style scoped>
+.theme-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  border-radius: var(--radius-md);
+  padding: 3px;
+  border: 1px solid transparent;
+  text-align: left;
+}
+.theme-card:hover {
+  background: var(--color-zinc-800);
+}
+.theme-card.on {
+  border-color: var(--color-orange-500);
+  background: color-mix(in srgb, var(--color-orange-500) 8%, transparent);
+}
+.theme-swatch {
+  position: relative;
+  display: block;
+  height: 2.6rem;
+  border-radius: 3px;
+  box-shadow: inset 0 0 0 1px rgb(127 127 127 / 0.25);
+  overflow: hidden;
+}
+.theme-lines {
+  position: absolute;
+  inset: 0.45rem 0.5rem auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.theme-lines i {
+  display: block;
+  height: 4px;
+  width: 85%;
+  border-radius: 2px;
+}
+.theme-accent {
+  position: absolute;
+  right: 0.4rem;
+  bottom: 0.35rem;
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 50%;
+}
+.theme-name {
+  overflow: hidden;
+  padding: 0 2px;
+  font-size: 11.5px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--color-zinc-300);
+}
+.theme-card.on .theme-name {
+  color: var(--color-zinc-100);
+}
 .settings-heading {
   margin-bottom: 0.25rem;
   font-size: 11px;

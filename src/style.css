@@ -121,6 +121,212 @@
   --cm-active-line: rgb(0 0 0 / 0.025);
 }
 
+/* ---------------------------------------------------------------------------------------
+   More palettes: Monokai, Dracula (dark) / Alucard (light), Tokyo Night / Tokyo Day.
+   Each palette sets a few base colours (--p-*); the shared block below derives the full
+   token ramp the UI uses from them. Ayu (above) keeps its hand-tuned values.
+   --------------------------------------------------------------------------------------- */
+:root[data-palette]:not([data-palette='ayu']) {
+  --color-zinc-100: var(--p-strong);
+  --color-zinc-200: var(--p-fg);
+  --color-zinc-300: color-mix(in srgb, var(--p-fg) 78%, var(--p-muted));
+  --color-zinc-400: color-mix(in srgb, var(--p-fg) 42%, var(--p-muted));
+  --color-zinc-500: var(--p-muted);
+  --color-zinc-600: color-mix(in srgb, var(--p-muted) 62%, var(--p-border));
+  --color-zinc-700: var(--p-border);
+  --color-zinc-800: var(--p-hover);
+  --color-zinc-900: var(--p-panel);
+  --color-zinc-925: var(--p-sidebar);
+  --color-zinc-950: var(--p-bg);
+
+  --color-orange-400: var(--p-accent-text);
+  --color-orange-500: var(--p-accent);
+  --color-orange-600: color-mix(in srgb, var(--p-accent) 86%, var(--p-strong));
+  --color-orange-700: color-mix(in srgb, var(--p-accent) 72%, var(--p-bg));
+  --color-on-accent: var(--p-on-accent);
+
+  --color-red-200: color-mix(in srgb, var(--p-red) 60%, var(--p-strong));
+  --color-red-300: color-mix(in srgb, var(--p-red) 80%, var(--p-strong));
+  --color-red-400: var(--p-red);
+  --color-red-500: var(--p-red);
+  --color-red-700: color-mix(in srgb, var(--p-red) 70%, var(--p-bg));
+  --color-red-800: color-mix(in srgb, var(--p-red) 38%, var(--p-bg));
+  --color-red-900: color-mix(in srgb, var(--p-red) 24%, var(--p-bg));
+  --color-red-950: color-mix(in srgb, var(--p-red) 13%, var(--p-bg));
+  --color-amber-300: color-mix(in srgb, var(--p-amber) 80%, var(--p-strong));
+  --color-amber-400: var(--p-amber);
+  --color-amber-500: var(--p-amber);
+  --color-amber-900: color-mix(in srgb, var(--p-amber) 24%, var(--p-bg));
+  --color-amber-950: color-mix(in srgb, var(--p-amber) 13%, var(--p-bg));
+  --color-emerald-200: color-mix(in srgb, var(--p-green) 60%, var(--p-strong));
+  --color-emerald-300: color-mix(in srgb, var(--p-green) 80%, var(--p-strong));
+  --color-emerald-400: var(--p-green);
+  --color-emerald-500: var(--p-green);
+  --color-emerald-800: color-mix(in srgb, var(--p-green) 38%, var(--p-bg));
+  --color-emerald-950: color-mix(in srgb, var(--p-green) 13%, var(--p-bg));
+  --color-sky-300: color-mix(in srgb, var(--p-blue) 80%, var(--p-strong));
+  --color-sky-400: var(--p-blue);
+  --color-sky-500: var(--p-blue);
+  --color-sky-900: color-mix(in srgb, var(--p-blue) 24%, var(--p-bg));
+  --color-sky-950: color-mix(in srgb, var(--p-blue) 13%, var(--p-bg));
+  --color-teal-400: var(--p-teal);
+  --color-violet-300: color-mix(in srgb, var(--p-violet) 80%, var(--p-strong));
+  --color-violet-400: var(--p-violet);
+  --color-violet-500: var(--p-violet);
+  --color-pink-400: var(--p-pink);
+
+  --modal-scrim: var(--p-scrim);
+  --cm-selection: var(--p-selection);
+  --cm-active-line: var(--p-active-line);
+}
+
+/* Monokai (classic Monokai colours) */
+:root[data-palette='monokai'][data-theme='dark'] {
+  --p-bg: #272822;
+  --p-sidebar: #1e1f1c;
+  --p-panel: #2d2e27;
+  --p-hover: #3e3d32;
+  --p-border: #49483e;
+  --p-strong: #f8f8f2;
+  --p-fg: #e2e2dc;
+  --p-muted: #908b74;
+  --p-accent: #fd971f;
+  --p-accent-text: #fd971f;
+  --p-on-accent: #1e1f1c;
+  --p-red: #f92672;
+  --p-amber: #e6db74;
+  --p-green: #a6e22e;
+  --p-blue: #66d9ef;
+  --p-teal: #a1efe4;
+  --p-violet: #ae81ff;
+  --p-pink: #ff6188;
+  --p-selection: rgb(117 113 94 / 0.38);
+  --p-active-line: rgb(255 255 255 / 0.035);
+  --p-scrim: rgb(14 14 11 / 0.62);
+}
+/* Monokai Light (Monokai Pro "Light" filter) */
+:root[data-palette='monokai'][data-theme='light'] {
+  --p-bg: #faf4f2;
+  --p-sidebar: #f2ebe8;
+  --p-panel: #f5eeec;
+  --p-hover: #ebe2df;
+  --p-border: #dcd2ce;
+  --p-strong: #29242a;
+  --p-fg: #403a41;
+  --p-muted: #918c8e;
+  --p-accent: #e16032;
+  --p-accent-text: #c94f22;
+  --p-on-accent: #ffffff;
+  --p-red: #e14775;
+  --p-amber: #b5700a;
+  --p-green: #269d69;
+  --p-blue: #1c8ca8;
+  --p-teal: #24917f;
+  --p-violet: #7058be;
+  --p-pink: #e14775;
+  --p-selection: rgb(41 36 42 / 0.1);
+  --p-active-line: rgb(0 0 0 / 0.025);
+  --p-scrim: rgb(41 36 42 / 0.28);
+}
+
+/* Dracula (https://draculatheme.com/contribute) */
+:root[data-palette='dracula'][data-theme='dark'] {
+  --p-bg: #282a36;
+  --p-sidebar: #21222c;
+  --p-panel: #2c2e3b;
+  --p-hover: #383a4a;
+  --p-border: #44475a;
+  --p-strong: #f8f8f2;
+  --p-fg: #e2e2dc;
+  --p-muted: #7f89b5;
+  --p-accent: #bd93f9;
+  --p-accent-text: #caa9fa;
+  --p-on-accent: #21222c;
+  --p-red: #ff5555;
+  --p-amber: #f1fa8c;
+  --p-green: #50fa7b;
+  --p-blue: #8be9fd;
+  --p-teal: #80ffea;
+  --p-violet: #bd93f9;
+  --p-pink: #ff79c6;
+  --p-selection: rgb(68 71 90 / 0.9);
+  --p-active-line: rgb(255 255 255 / 0.035);
+  --p-scrim: rgb(15 16 22 / 0.62);
+}
+/* Alucard: Dracula's official light variant */
+:root[data-palette='dracula'][data-theme='light'] {
+  --p-bg: #fffbeb;
+  --p-sidebar: #f6f1dc;
+  --p-panel: #f9f4e2;
+  --p-hover: #eee8d1;
+  --p-border: #ddd6bd;
+  --p-strong: #1f1f1f;
+  --p-fg: #33312a;
+  --p-muted: #6c664b;
+  --p-accent: #644ac9;
+  --p-accent-text: #644ac9;
+  --p-on-accent: #fffbeb;
+  --p-red: #cb3a2a;
+  --p-amber: #846e15;
+  --p-green: #14710a;
+  --p-blue: #036a96;
+  --p-teal: #0d7d72;
+  --p-violet: #644ac9;
+  --p-pink: #a3144d;
+  --p-selection: rgb(100 74 201 / 0.16);
+  --p-active-line: rgb(0 0 0 / 0.025);
+  --p-scrim: rgb(31 31 31 / 0.28);
+}
+
+/* Tokyo Night (https://github.com/folke/tokyonight.nvim, "night" style) */
+:root[data-palette='tokyo'][data-theme='dark'] {
+  --p-bg: #1a1b26;
+  --p-sidebar: #16161e;
+  --p-panel: #1f2335;
+  --p-hover: #292e42;
+  --p-border: #2f334d;
+  --p-strong: #c0caf5;
+  --p-fg: #a9b1d6;
+  --p-muted: #737aa2;
+  --p-accent: #7aa2f7;
+  --p-accent-text: #7aa2f7;
+  --p-on-accent: #16161e;
+  --p-red: #f7768e;
+  --p-amber: #e0af68;
+  --p-green: #9ece6a;
+  --p-blue: #7dcfff;
+  --p-teal: #73daca;
+  --p-violet: #bb9af7;
+  --p-pink: #ff9e64;
+  --p-selection: rgb(122 162 247 / 0.2);
+  --p-active-line: rgb(255 255 255 / 0.03);
+  --p-scrim: rgb(10 11 18 / 0.62);
+}
+/* Tokyo Day: Tokyo Night's light style */
+:root[data-palette='tokyo'][data-theme='light'] {
+  --p-bg: #e1e2e7;
+  --p-sidebar: #d5d7e0;
+  --p-panel: #e9e9ed;
+  --p-hover: #d2d4de;
+  --p-border: #c4c8da;
+  --p-strong: #273d82;
+  --p-fg: #3760bf;
+  --p-muted: #6c76a8;
+  --p-accent: #2e7de9;
+  --p-accent-text: #2e7de9;
+  --p-on-accent: #ffffff;
+  --p-red: #f52a65;
+  --p-amber: #8c6c3e;
+  --p-green: #587539;
+  --p-blue: #007197;
+  --p-teal: #118c74;
+  --p-violet: #9854f1;
+  --p-pink: #b15c00;
+  --p-selection: rgb(46 125 233 / 0.16);
+  --p-active-line: rgb(0 0 0 / 0.03);
+  --p-scrim: rgb(39 61 130 / 0.22);
+}
+
 html,
 body,
 #app {
@@ -135,6 +341,7 @@ body {
   button:not(:disabled),
   [role='button']:not([aria-disabled='true']),
   [role='option'],
+  [role='menuitem'],
   [role='switch'],
   summary {
     cursor: pointer;
@@ -286,4 +493,9 @@ body {
 }
 ::-webkit-scrollbar-track {
   background: transparent;
+}
+
+/* Send menu item under an intercepting overlay: hover look driven from JS (RequestEditor) */
+.menu-hover {
+  background: var(--color-zinc-700);
 }
