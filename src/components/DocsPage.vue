@@ -8,8 +8,8 @@ import { supabase } from '../lib/supabase.js'
 import { db } from '../db/index.js'
 import { buildDocsSnapshot } from '../lib/publish.js'
 import { resolveRequest } from '../lib/resolve.js'
-import { generateSnippet } from '../lib/snippets.js'
-import { methodColor, statusColor } from '../lib/ui.js'
+import { generateSnippet, snippetLangsFor } from '../lib/snippets.js'
+import { requestBadge, statusColor } from '../lib/ui.js'
 
 const props = defineProps({
   id: { type: String, required: true }, // slug, or collection id in preview mode
@@ -90,7 +90,12 @@ const LANGS = [
 ]
 const lang = ref('curl')
 const empty = new Map()
-const snippet = (r) => generateSnippet(lang.value, resolveRequest(r, empty, { keepDynamic: true }))
+// HTTP / GraphQL requests use the chosen language; WebSocket, Socket.IO and gRPC have their own
+const snippet = (r) => {
+  const langs = snippetLangsFor(r.protocol)
+  const id = langs.some((l) => l.id === lang.value) ? lang.value : langs[0].id
+  return generateSnippet(id, resolveRequest(r, empty, { keepDynamic: true }), r)
+}
 
 const authLabel = (a) =>
   ({
@@ -140,7 +145,7 @@ const enabledRows = (rows) => (rows || []).filter((r) => r.enabled !== false && 
           <div v-for="g in groups" :key="g.title" class="mb-3">
             <p v-if="g.title" class="mb-1 text-xs font-medium tracking-wide text-zinc-500 uppercase">{{ g.title }}</p>
             <a v-for="r in g.requests" :key="r.id" :href="'#' + anchor(r)" class="flex items-center gap-2 rounded px-2 py-1 text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100">
-              <span class="w-12 shrink-0 font-mono text-[10px] font-bold" :class="methodColor[r.method]">{{ r.method }}</span>
+              <span class="w-12 shrink-0 font-mono text-[10px] font-bold" :class="requestBadge(r).class">{{ requestBadge(r).label }}</span>
               <span class="truncate">{{ r.name }}</span>
             </a>
           </div>
@@ -169,7 +174,7 @@ const enabledRows = (rows) => (rows || []).filter((r) => r.enabled !== false && 
               <div class="min-w-0">
                 <h3 class="text-lg font-semibold text-zinc-100">{{ r.name }}</h3>
                 <div class="mt-2 flex items-center gap-2 rounded border border-zinc-800 bg-zinc-900 px-3 py-2 font-mono text-[13px]">
-                  <span class="font-bold" :class="methodColor[r.method]">{{ r.method }}</span>
+                  <span class="font-bold" :class="requestBadge(r).class">{{ requestBadge(r).label }}</span>
                   <span class="min-w-0 break-all text-zinc-300">{{ r.url }}</span>
                 </div>
                 <p v-for="(p, i) in paragraphs(r.description)" :key="i" class="mt-3 whitespace-pre-line text-sm text-zinc-400">{{ p }}</p>

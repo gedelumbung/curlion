@@ -2,7 +2,7 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import { ChevronRight, Folder, FolderOpen, MoreHorizontal } from 'lucide-vue-next'
 import { canEdit, moveNode, openRequest, renameNode, state, toggleExpanded } from '../store.js'
-import { methodColor } from '../lib/ui.js'
+import { requestBadge } from '../lib/ui.js'
 
 defineOptions({ name: 'TreeNode' })
 const props = defineProps({
@@ -29,6 +29,8 @@ const childQuery = computed(() => (props.node.type === 'folder' && q.value && pr
 const isFolder = computed(() => props.node.type === 'folder')
 const open = computed(() => (q.value ? true : !!state.expanded[props.node.id]))
 const active = computed(() => state.active?.requestId === props.node.id)
+// label follows the tab's unsaved draft (e.g. after switching the request type)
+const badge = computed(() => requestBadge(state.drafts[props.node.id] || props.node, { short: true }))
 
 function click() {
   if (isFolder.value) toggleExpanded(props.node.id)
@@ -106,7 +108,7 @@ function findParentId(items, id, parent = null) {
         <FolderOpen v-if="open" :size="14" class="shrink-0 text-zinc-500" />
         <Folder v-else :size="14" class="shrink-0 text-zinc-500" />
       </template>
-      <span v-else class="w-12 shrink-0 text-right font-mono text-[10px] font-bold" :class="methodColor[node.method]">{{ node.method === 'DELETE' ? 'DEL' : node.method === 'OPTIONS' ? 'OPT' : node.method }}</span>
+      <span v-else class="w-12 shrink-0 text-right font-mono text-[10px] font-bold" :class="badge.class">{{ badge.label }}</span>
 
       <input v-if="renaming" ref="input" v-model="draft" class="min-w-0 flex-1 rounded border border-orange-500 bg-zinc-900 px-1 outline-none" @click.stop @keydown.enter="commit" @keydown.esc="emit('rename-done')" @blur="commit" />
       <span v-else class="min-w-0 flex-1 truncate">{{ node.name }}</span>

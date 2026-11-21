@@ -5,7 +5,7 @@ import { Download, FilePlus, FolderPlus, Globe, History, Layers, Trash2, Users }
 import { addFolder, addRequest, cloudEnabled, deleteCollection, fetchActivity, openRequest, renameNode, roleOf, state, touchCollection } from '../store.js'
 import { ACTIONS, actionColor, ago } from '../lib/activity.js'
 import { exportPostman } from '../lib/postman.js'
-import { downloadJson, methodColor } from '../lib/ui.js'
+import { downloadJson, requestBadge } from '../lib/ui.js'
 
 const props = defineProps({ collection: { type: Object, required: true } })
 const emit = defineEmits(['collection']) // { col, tab } -> CollectionModal (publish / activity)
@@ -138,7 +138,7 @@ function remove() {
                 @click="openRequest(col.id, r.id, { preview: true })"
                 @dblclick="openRequest(col.id, r.id)"
               >
-                <span class="w-12 shrink-0 font-mono text-[11px] font-bold" :class="methodColor[r.method]">{{ r.method }}</span>
+                <span class="w-12 shrink-0 font-mono text-[11px] font-bold" :class="requestBadge(r).class">{{ requestBadge(r).label }}</span>
                 <span class="w-48 shrink-0 truncate text-zinc-200">{{ r.name }}</span>
                 <span class="min-w-0 flex-1 truncate font-mono text-xs text-zinc-500">{{ r.url }}</span>
               </li>

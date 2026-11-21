@@ -19,6 +19,9 @@ export function sanitizeRequest(req) {
   for (const h of r.headers || []) if (SENSITIVE_HEADER.test(h.key)) h.value = hide(h.value, '<redacted>')
   for (const p of r.params || []) if (/^(api_?key|access_token|token|key|secret)$/i.test(p.key)) p.value = hide(p.value, '<redacted>')
   if (r.url) r.url = r.url.replace(/([?&](?:api_?key|access_token|token|key|secret)=)([^&#]*)/gi, (m, k, v) => k + hide(decodeURIComponent(v), '<redacted>'))
+  // protocol settings: hide literal Socket.IO auth payloads; the .proto source is not published
+  if (r.socketio?.auth) r.socketio.auth = hide(r.socketio.auth, '<auth payload>')
+  if (r.grpc) delete r.grpc.proto
   // drop things that only matter inside the editor
   delete r.extract
   // keep only enabled rows

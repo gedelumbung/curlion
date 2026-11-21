@@ -23,11 +23,37 @@ export function kv(key = '', value = '', extra = {}) {
   return { id: uid(), key, value, description: '', enabled: true, ...extra }
 }
 
+/** Request protocols. Requests saved before protocols existed are HTTP. */
+export const PROTOCOLS = [
+  { id: 'http', label: 'HTTP' },
+  { id: 'graphql', label: 'GraphQL' },
+  { id: 'ws', label: 'WebSocket' },
+  { id: 'socketio', label: 'Socket.IO' },
+  { id: 'grpc', label: 'gRPC' },
+]
+export const protocolOf = (req) => req?.protocol || 'http'
+
+/** Default per-protocol settings; filled in lazily so older requests keep working. */
+export const PROTOCOL_DEFAULTS = {
+  graphql: () => ({ query: '', variables: '' }),
+  ws: () => ({ message: '', format: 'text', protocols: '', saved: [] }), // saved: { id, name, body }
+  socketio: () => ({ path: '/socket.io', event: 'message', args: '', ack: false, auth: '', listen: ['message'], transports: 'websocket', saved: [] }),
+  grpc: () => ({ proto: '', protoName: '', service: '', method: '', message: '{}', tls: false }),
+}
+
+/** Make sure a request has the settings object for its protocol (mutates, returns it). */
+export function ensureProtocol(req) {
+  const p = protocolOf(req)
+  if (PROTOCOL_DEFAULTS[p]) req[p] = { ...PROTOCOL_DEFAULTS[p](), ...(req[p] || {}) }
+  return req
+}
+
 export function newRequest(name = 'New Request', patch = {}) {
   return {
     id: uid(),
     type: 'request',
     name,
+    protocol: 'http', // http | graphql | ws | socketio | grpc
     method: 'GET',
     url: '',
     description: '', // shown on the published docs page

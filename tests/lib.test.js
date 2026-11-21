@@ -268,3 +268,69 @@ test('uid works without crypto.randomUUID (plain-http LAN hosting)', () => {
     Object.defineProperty(crypto, 'randomUUID', { value: orig, configurable: true })
   }
 })
+
+import { summarizeSchema, operationFor } from '../src/lib/graphql.js'
+test('GraphQL: resolveRequest builds a JSON POST and keeps {{vars}} in variables valid', () => {
+  const req = { ...newRequest('q'), protocol: 'graphql', url: '{{base}}/graphql', graphql: { query: 'query($id: ID!) { user(id: $id) { name } }', variables: '{"id": "{{userId}}"}' } }
+  const scope = new Map([['base', { value: 'https://api.test' }], ['userId', { value: '42' }]])
+  const r = resolveRequest(req, scope)
+  assert.equal(r.method, 'POST')
+  assert.equal(r.url, 'https://api.test/graphql')
+  assert.deepEqual(JSON.parse(r.body.raw), { query: req.graphql.query, variables: { id: '42' } })
+  assert.ok(r.headers.some((h) => h.key === 'Content-Type' && h.value === 'application/json'))
+})
+
+test('GraphQL: schema summary and starter operation', () => {
+  const T = (kind, name, ofType) => ({ kind, name, ofType })
+  const json = { data: { __schema: { queryType: { name: 'Query' }, mutationType: null, subscriptionType: null, types: [
+    { kind: 'OBJECT', name: 'Query', fields: [{ name: 'user', args: [{ name: 'id', type: T('NON_NULL', null, T('SCALAR', 'ID')) }], type: T('OBJECT', 'User') }] },
+    { kind: 'OBJECT', name: 'User', fields: [{ name: 'id', args: [], type: T('SCALAR', 'ID') }, { name: 'name', args: [], type: T('SCALAR', 'String') }] },
+    { kind: 'SCALAR', name: 'ID' }, { kind: 'SCALAR', name: 'String' },
+  ] } } }
+  const s = summarizeSchema(json)
+  assert.equal(s.roots[0].kind, 'query')
+  const op = operationFor('query', s.roots[0].fields[0], s.types)
+  assert.match(op, /query User\(\$id: ID!\) \{\n  user\(id: \$id\) \{\n    id\n    name\n  \}\n\}/)
+  assert.throws(() => summarizeSchema({ errors: [{ message: 'introspection disabled' }] }), /introspection disabled/)
+})
+
+test('Postman GraphQL body round trip', () => {
+  const col = importPostman({ info: { name: 'G', schema: 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json' }, item: [{ name: 'Q', request: { method: 'POST', url: 'https://x/graphql', body: { mode: 'graphql', graphql: { query: '{ me { id } }', variables: '{"a":1}' } } } }] }).collection
+  const r = col.items[0]
+  assert.equal(r.protocol, 'graphql')
+  assert.equal(r.graphql.query, '{ me { id } }')
+  const back = exportPostman(col).item[0].request
+  assert.equal(back.body.mode, 'graphql')
+  assert.equal(back.body.graphql.variables, '{"a":1}')
+})
+
+test('WebSocket URLs default to ws:// and gRPC targets stay host:port', () => {
+  const ws = resolveRequest({ ...newRequest('w'), protocol: 'ws', url: 'echo.test/socket' }, new Map())
+  assert.equal(ws.url, 'ws://echo.test/socket')
+  const g = resolveRequest({ ...newRequest('g'), protocol: 'grpc', url: 'localhost:50051' }, new Map())
+  assert.equal(g.url, 'localhost:50051')
+})
+
+import { parseProto, findMethod, encodeMessage, decodeMessage, exampleMessage } from '../src/lib/grpc.js'
+const PROTO = `syntax = "proto3";
+package demo.v1;
+import "google/protobuf/timestamp.proto";
+service Greeter {
+  rpc SayHello (HelloRequest) returns (HelloReply);
+  rpc Countdown (HelloRequest) returns (stream HelloReply);
+}
+enum Mood { MOOD_UNSPECIFIED = 0; HAPPY = 1; }
+message HelloRequest { string name = 1; int32 times = 2; Mood mood = 3; repeated string tags = 4; }
+message HelloReply { string message = 1; google.protobuf.Timestamp at = 2; }`
+
+test('gRPC: parse .proto (with a well-known type), encode and decode', async () => {
+  const p = await parseProto(PROTO)
+  assert.deepEqual(p.services.map((s) => s.fullName), ['demo.v1.Greeter'])
+  const m = findMethod(p, 'demo.v1.Greeter', 'Countdown')
+  assert.equal(m.path, '/demo.v1.Greeter/Countdown')
+  assert.equal(m.responseStream, true)
+  assert.deepEqual(exampleMessage(p.root, m.requestType), { name: '', times: 0, mood: 'MOOD_UNSPECIFIED', tags: [''] })
+  const b64 = encodeMessage(p.root, 'demo.v1.HelloRequest', { name: 'Ada', times: 3, mood: 'HAPPY', tags: ['x'] })
+  assert.deepEqual(decodeMessage(p.root, 'demo.v1.HelloRequest', b64), { name: 'Ada', times: 3, mood: 'HAPPY', tags: ['x'] })
+  assert.throws(() => encodeMessage(p.root, 'demo.v1.HelloRequest', { times: 'many' }), /Invalid demo.v1.HelloRequest/)
+})

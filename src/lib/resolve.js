@@ -19,9 +19,11 @@ function hasHeader(headers, name) {
 export function resolveRequest(req, scope, opts = {}) {
   const I = (s) => interpolate(s ?? '', scope, opts)
 
+  const protocol = req.protocol || 'http'
   let url = I(req.url).trim()
-  // default to http:// like Postman, unless the URL still starts with an unresolved {{var}}
-  if (url && !/^[a-z][a-z0-9+.-]*:\/\//i.test(url) && !url.startsWith('{{')) url = 'http://' + url
+  // default scheme like Postman (ws:// for WebSocket; gRPC targets are host:port), unless
+  // the URL still starts with an unresolved {{var}}
+  if (url && protocol !== 'grpc' && !/^[a-z][a-z0-9+.-]*:\/\//i.test(url) && !url.startsWith('{{')) url = (protocol === 'ws' ? 'ws://' : 'http://') + url
 
   const headers = enabled(req.headers).map((h) => ({ key: I(h.key), value: I(h.value) }))
 
@@ -36,6 +38,16 @@ export function resolveRequest(req, scope, opts = {}) {
   } else if (a.type === 'apikey' && a.apikey?.key) {
     if (a.apikey.in === 'query') url = appendQuery(url, I(a.apikey.key), I(a.apikey.value))
     else headers.push({ key: I(a.apikey.key), value: I(a.apikey.value) })
+  }
+
+  // GraphQL: always a JSON POST of { query, variables }. Variables are spliced in as text
+  // so {{vars}} inside them still produce valid JSON once resolved.
+  if (protocol === 'graphql') {
+    const g = req.graphql || {}
+    const vars = I(g.variables || '').trim()
+    const raw = `{"query":${JSON.stringify(I(g.query || ''))}${vars ? `,"variables":${vars}` : ''}}`
+    if (!hasHeader(headers, 'content-type')) headers.push({ key: 'Content-Type', value: 'application/json' })
+    return { method: 'POST', url, headers, body: { mode: 'raw', raw, contentType: 'application/json' }, protocol }
   }
 
   // Body (GET/HEAD cannot carry one in fetch)
@@ -63,7 +75,7 @@ export function resolveRequest(req, scope, opts = {}) {
     }
   }
 
-  return { method: req.method, url, headers, body }
+  return { method: req.method, url, headers, body, protocol }
 }
 
 export function urlencode(fields) {

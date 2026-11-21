@@ -31,8 +31,32 @@ const prettyJson = (raw) => {
 
 const indent = (str, pad) => str.split('\n').join('\n' + pad)
 
-export function generateSnippet(lang, r) {
+/** Snippet languages offered for a request protocol. */
+const PROTOCOL_LANGS = {
+  ws: [
+    { id: 'websocat', label: 'websocat (CLI)', cm: 'text' },
+    { id: 'ws-js', label: 'JavaScript (WebSocket)', cm: 'text' },
+  ],
+  socketio: [{ id: 'socketio-js', label: 'JavaScript (socket.io-client)', cm: 'text' }],
+  grpc: [{ id: 'grpcurl', label: 'grpcurl (CLI)', cm: 'text' }],
+}
+export const snippetLangsFor = (protocol) => PROTOCOL_LANGS[protocol] || SNIPPET_LANGS
+
+/**
+ * @param lang snippet id
+ * @param r resolved request (resolveRequest)
+ * @param req the stored request, for protocol settings (WebSocket message, gRPC method…)
+ */
+export function generateSnippet(lang, r, req = {}) {
   switch (lang) {
+    case 'websocat':
+      return websocat(r, req)
+    case 'ws-js':
+      return wsJs(r, req)
+    case 'socketio-js':
+      return socketioJs(r, req)
+    case 'grpcurl':
+      return grpcurl(r, req)
     case 'curl':
       return curl(r)
     case 'fetch':
@@ -251,4 +275,75 @@ function pythonLiteral(v, pad = '') {
   const keys = Object.keys(v)
   if (!keys.length) return '{}'
   return '{\n' + keys.map((k) => `${inner}${py(k)}: ${pythonLiteral(v[k], inner)}`).join(',\n') + '\n' + pad + '}'
+}
+
+// ---- WebSocket / Socket.IO / gRPC -------------------------------------------------
+
+function websocat(r, req) {
+  const lines = [`websocat ${sq(r.url)}`]
+  for (const h of visibleHeaders(r)) lines.push(`-H ${sq(`${h.key}: ${h.value}`)}`)
+  const protocols = req.ws?.protocols?.trim()
+  if (protocols) lines.push(`--protocol ${sq(protocols)}`)
+  const cmd = lines.join(' \\\n  ')
+  return req.ws?.message ? `echo ${sq(req.ws.message)} | ${cmd}` : cmd
+}
+
+function wsJs(r, req) {
+  const protocols = (req.ws?.protocols || '').split(',').map((p) => p.trim()).filter(Boolean)
+  const out = [`const socket = new WebSocket(${js(r.url)}${protocols.length ? `, ${JSON.stringify(protocols)}` : ''})`, '']
+  if (visibleHeaders(r).length) out.push('// Note: browsers cannot set custom headers on WebSocket connections.', '')
+  out.push("socket.addEventListener('open', () => {")
+  if (req.ws?.message) out.push(`  socket.send(${js(req.ws.message)})`)
+  out.push('})', "socket.addEventListener('message', (event) => console.log(event.data))")
+  return out.join('\n')
+}
+
+function socketioJs(r, req) {
+  const s = req.socketio || {}
+  const opts = [`  path: ${js(s.path || '/socket.io')},`, `  transports: ${s.transports === 'polling' ? "['polling', 'websocket']" : "['websocket']"},`]
+  if (s.auth?.trim()) opts.push(`  auth: ${s.auth.trim().replace(/\n/g, '\n  ')},`)
+  if (visibleHeaders(r).length) opts.push(`  extraHeaders: ${JSON.stringify(Object.fromEntries(visibleHeaders(r).map((h) => [h.key, h.value])))},`)
+  // a JSON array means several arguments, like the app sends them
+  let args = ''
+  if (s.args?.trim()) {
+    try {
+      const v = JSON.parse(s.args)
+      args = Array.isArray(v) ? v.map((x) => `, ${JSON.stringify(x)}`).join('') : `, ${JSON.stringify(v)}`
+    } catch {
+      args = `, ${s.args.trim()}`
+    }
+  }
+  return [
+    "import { io } from 'socket.io-client'",
+    '',
+    `const socket = io(${js(r.url)}, {`,
+    ...opts,
+    '})',
+    '',
+    "socket.on('connect', () => {",
+    `  socket.emit(${js(s.event || 'message')}${args})`,
+    '})',
+    'socket.onAny((event, ...args) => console.log(event, args))',
+  ].join('\n')
+}
+
+function grpcurl(r, req) {
+  const g = req.grpc || {}
+  const target = r.url.replace(/^grpcs?:\/\//, '')
+  const tls = g.tls || /^grpcs:\/\//.test(r.url)
+  const lines = ['grpcurl']
+  if (!tls) lines.push('-plaintext')
+  if (g.protoName) lines.push(`-proto ${sq(g.protoName.split(',')[0].trim())}`)
+  for (const h of visibleHeaders(r)) lines.push(`-H ${sq(`${h.key}: ${h.value}`)}`)
+  if (g.message?.trim() && g.message.trim() !== '{}') lines.push(`-d ${sq(JSON.stringify(JSON.parse(safeJson(g.message))))}`)
+  lines.push(sq(target), sq(g.service && g.method ? `${g.service}/${g.method}` : 'package.Service/Method'))
+  return lines.join(' \\\n  ')
+}
+const safeJson = (t) => {
+  try {
+    JSON.parse(t)
+    return t
+  } catch {
+    return '{}'
+  }
 }

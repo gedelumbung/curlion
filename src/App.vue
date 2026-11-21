@@ -7,6 +7,7 @@ import Sidebar from './components/Sidebar.vue'
 import RequestEditor from './components/RequestEditor.vue'
 import TabBar from './components/TabBar.vue'
 import CollectionOverview from './components/CollectionOverview.vue'
+import MessageLog from './components/MessageLog.vue'
 import UiSelect from './components/UiSelect.vue'
 import CurlionLogo from './components/CurlionLogo.vue'
 import ResponseViewer from './components/ResponseViewer.vue'
@@ -243,7 +244,8 @@ const syncLabel = {
             @pointerdown="startDrag('split', $event)"
             @dblclick="resetPane('split')"
           ></div>
-          <ResponseViewer :key="activeRequest.id" class="min-h-0 flex-1" />
+          <MessageLog v-if="activeRequest.protocol === 'ws' || activeRequest.protocol === 'socketio'" :key="'log' + activeRequest.id" class="min-h-0 flex-1" />
+          <ResponseViewer v-else :key="activeRequest.id" class="min-h-0 flex-1" />
         </div>
         <CollectionOverview v-else-if="activeOverview" :key="activeOverview.id" :collection="activeOverview" @collection="openCollection" />
         <div v-else class="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center text-zinc-500">

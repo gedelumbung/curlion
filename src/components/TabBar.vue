@@ -5,10 +5,9 @@
 import { nextTick, ref, watch } from 'vue'
 import { History, Layers, Loader2, Plus, X } from 'lucide-vue-next'
 import { addNewRequest, keepTab, moveTab, openRequest, openTabs, requestCloseTabs, state } from '../store.js'
-import { methodColor } from '../lib/ui.js'
+import { requestBadge } from '../lib/ui.js'
 import { vTopLayer } from '../lib/topLayer.js'
 
-const SHORT = { DELETE: 'DEL', OPTIONS: 'OPT' }
 const strip = ref(null)
 const menu = ref(null) // { x, y, index }
 const dragFrom = ref(null)
@@ -92,7 +91,7 @@ function onDrop(i) {
         <span v-if="dirty" class="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-red-500" title="Unsaved changes"></span>
         <template v-if="req">
           <History v-if="!col" :size="12" class="shrink-0 text-zinc-500" />
-          <span class="shrink-0 font-mono text-[10px] font-bold" :class="methodColor[req.method]">{{ SHORT[req.method] || req.method }}</span>
+          <span class="shrink-0 font-mono text-[10px] font-bold" :class="requestBadge(req, { short: true }).class">{{ requestBadge(req, { short: true }).label }}</span>
           <span class="truncate" :class="{ italic: tab.preview }">{{ req.name }}</span>
           <Loader2 v-if="state.pending[req.id]" :size="12" class="shrink-0 animate-spin text-zinc-500" />
         </template>

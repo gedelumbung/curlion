@@ -57,6 +57,10 @@ netlify dev        # runs Vite + edge functions at /api/proxy and /mock/*
 | Body: none, form-data (text/file), x-www-form-urlencoded, raw (JSON/Text/XML/HTML) | ✅ |
 | Response: colored status, time (ms), size, headers, Pretty/Tree/Raw, Copy | ✅ |
 | Send and Download + automatic binary response detection (`Content-Disposition`, pdf/zip/images) | ✅ |
+| **GraphQL** requests: Query and Variables editors, schema explorer from introspection (click "Use" to generate an operation), sent via Direct / Proxy / Agent; Postman GraphQL bodies import and export | ✅ |
+| **WebSocket**: connect, send text/JSON, saved messages, live message log; subprotocols; through the Agent with custom headers, auth, localhost and self-signed TLS | ✅ |
+| **Socket.IO**: connect with path, transport and auth payload, emit events with arguments and ack, every incoming event logged | ✅ |
+| **gRPC** (through the Agent): paste or upload a .proto (well-known types built in), pick a method, example message, metadata, TLS; unary, server streaming (replies collected) and client streaming (JSON array); grpcurl snippet | ✅ |
 | Direct Browser Mode & Netlify Proxy Mode (localhost is blocked by the proxy, with a clear message) | ✅ |
 | **Agent Mode** (like Postman's Desktop Agent): requests go through the Curlion Agent on your computer, so they reach localhost / your local network, skip CORS and can set Cookie/Host/User-Agent | ✅ |
 | Live sidebar search (name/folder/URL), request history: clicking an entry opens the request exactly as it was sent (method, URL, params, headers, auth, body) in a tab, to resend, edit or **Save to collection** | ✅ |
@@ -148,6 +152,7 @@ Then pick **Agent** in the header (the dot is green when the agent is running; c
 - Accepts requests only from the `--origin` site(s), checked on every request and CORS preflight; other `Host` headers are rejected (DNS rebinding).
 - Follows redirects, decodes gzip/deflate/br, keeps multipart boundaries, accepts self-signed HTTPS certificates (`--strict-tls` to verify them).
 - Logs each request in the terminal.
+- Also carries **gRPC** calls (HTTP/2, `POST /grpc`) and **WebSocket** connections with custom headers (`/ws/*`, relayed to the browser as Server-Sent Events). Agent 1.1 or newer is needed for these.
 
 ## Notes
 

@@ -1,11 +1,14 @@
 // Global app store: state, persistence (IndexedDB) and cloud sync (Supabase).
 import { computed, reactive, toRaw, watch } from 'vue'
 import { db, getMeta, migrateLegacyDb, setMeta } from './db/index.js'
-import { clone, findNode, newCollection, newEnvironment, newFolder, newRequest, reId, uid } from './lib/model.js'
-import { buildScope, getByPath } from './lib/variables.js'
+import { clone, ensureProtocol, findNode, newCollection, newEnvironment, newFolder, newRequest, protocolOf, reId, uid } from './lib/model.js'
+import { buildScope, getByPath, interpolate } from './lib/variables.js'
 import { paramsFromUrl } from './lib/url.js'
 import { resolveRequest } from './lib/resolve.js'
-import { AGENT_DEFAULT_PORT, pingAgent, sendRequest } from './lib/http.js'
+import { AGENT_DEFAULT_PORT, agentBase, pingAgent, sendRequest } from './lib/http.js'
+import { connectSocketIo, connectWsAgent, connectWsDirect } from './lib/realtime.js'
+import { GRPC_STATUS, decodeMessage, encodeMessage, findMethod, parseProto } from './lib/grpc.js'
+import { indentString } from './lib/settings.js'
 import { collectionToRow, environmentToRow, rowToCollection, rowToEnvironment, supabase } from './lib/supabase.js'
 import { countRequests, diffTrees } from './lib/activity.js'
 import { buildDocsSnapshot } from './lib/publish.js'
@@ -32,6 +35,7 @@ export const state = reactive({
   expanded: {}, // folder/collection id -> bool
   search: '',
   responses: {}, // requestId -> response (kept per request for this session)
+  conns: {}, // requestId -> WebSocket / Socket.IO connection state and message log
   pending: {}, // requestId -> true while that request is in flight
   errors: {}, // requestId -> error message of its last send
   history: [],
@@ -482,6 +486,7 @@ export function closeTabs(pred) {
   for (const t of state.tabs) {
     if (kept.includes(t)) continue
     if (state.pending[t.requestId]) cancel(t.requestId)
+    if (realtime.has(t.requestId)) disconnectRealtime(t.requestId) // closing a tab ends its connection
     discardDraft(t.requestId) // unsaved edits of closed tabs are dropped (callers save first)
   }
   if (activeClosed || !state.active) {
@@ -740,6 +745,11 @@ export async function send({ download = false } = {}) {
     state.errors[id] = 'Enter a request URL first.'
     return
   }
+  const protocol = protocolOf(req)
+  // WebSocket / Socket.IO: Send (Ctrl+Enter) connects, or sends the composed message when open
+  if (protocol === 'ws' || protocol === 'socketio') {
+    return state.conns[id]?.status === 'open' ? sendRealtime(id) : connectRealtime()
+  }
   controllers.get(id)?.abort()
   const controller = new AbortController()
   controllers.set(id, controller)
@@ -747,6 +757,19 @@ export async function send({ download = false } = {}) {
   delete state.errors[id]
   const resolved = resolveRequest(req, scope.value)
   try {
+    if (protocol === 'grpc') {
+      const res = await invokeGrpc(req, resolved, controller.signal)
+      state.responses[id] = res
+      addHistory(req, { method: 'GRPC', url: `${resolved.url}${res.grpcPath}` }, res)
+      return
+    }
+    if (protocol === 'graphql') {
+      try {
+        JSON.parse(resolved.body.raw)
+      } catch {
+        throw new Error('Variables are not valid JSON (after replacing {{variables}}). Check the Variables tab.')
+      }
+    }
     if (state.mode === 'proxy' && /^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])/i.test(resolved.url)) {
       throw new Error('localhost cannot be reached through the cloud proxy. Use Agent mode (runs requests from your computer), or Direct mode with CORS enabled on your local server.')
     }
@@ -768,6 +791,164 @@ export async function send({ download = false } = {}) {
       delete state.pending[id]
     }
   }
+}
+
+// ---- gRPC (through the Curlion Agent) -------------------------------------------
+
+async function invokeGrpc(req, resolved, signal) {
+  ensureProtocol(req)
+  const g = req.grpc
+  if (state.mode !== 'agent') throw new Error('gRPC runs through the Curlion Agent. Switch to Agent mode in the header (and start the agent).')
+  if (!g.proto.trim()) throw new Error('Add the service definition in the Proto tab first.')
+  const parsed = await parseProto(g.proto)
+  const method = findMethod(parsed, g.service, g.method)
+  if (!method) throw new Error('Pick a service method (next to the address).')
+  let json
+  try {
+    json = JSON.parse(interpolate(g.message || '{}', scope.value) || '{}')
+  } catch (e) {
+    throw new Error(`Message is not valid JSON: ${e.message}`)
+  }
+  const outgoing = method.requestStream ? (Array.isArray(json) ? json : [json]) : [json]
+  const target = resolved.url.replace(/^grpcs?:\/\//, '').replace(/\/+$/, '')
+  const tls = g.tls || /^grpcs:\/\//.test(resolved.url)
+  const res = await fetch(`${agentBase(state.agent.port)}/grpc`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ target, tls, path: method.path, metadata: resolved.headers, messages: outgoing.map((m) => encodeMessage(parsed.root, method.requestType, m)) }),
+    signal,
+    targetAddressSpace: 'loopback',
+  }).catch((e) => {
+    if (e.name === 'AbortError') throw e
+    throw new Error(`Could not reach the Curlion Agent on 127.0.0.1:${state.agent.port}. Start it (header → Agent) and try again.`)
+  })
+  if (!res.ok) throw new Error(`Agent: ${await res.text()}`)
+  state.agent.status = 'online'
+  const r = await res.json()
+  const replies = r.messages.map((b64) => decodeMessage(parsed.root, method.responseType, b64))
+  const body = method.responseStream ? replies : (replies[0] ?? null)
+  const text = r.grpcStatus === 0 || body !== null ? JSON.stringify(body, null, indentString()) : ''
+  return {
+    grpc: true,
+    grpcPath: method.path,
+    status: r.grpcStatus ?? -1,
+    statusText: r.grpcStatus === null ? `HTTP ${r.httpStatus}` : GRPC_STATUS[r.grpcStatus] || 'UNKNOWN',
+    message: r.grpcMessage,
+    time: r.time,
+    size: r.messages.reduce((n, b) => n + Math.floor((b.length * 3) / 4), 0),
+    headers: [...r.headers, ...r.trailers.map((t) => ({ ...t, trailer: true }))],
+    contentType: 'application/json',
+    body: r.grpcMessage && r.grpcStatus !== 0 ? `${r.grpcMessage}${text ? `\n\n${text}` : ''}` : text,
+    json: r.grpcStatus === 0 ? body : undefined,
+    binary: false,
+    at: Date.now(),
+  }
+}
+
+// ---- WebSocket / Socket.IO connections --------------------------------------------
+// state.conns[requestId] = { status: 'connecting'|'open'|'closed', log: [...], protocol }
+
+const realtime = new Map() // requestId -> { send, close }
+const LOG_LIMIT = 500
+let logSeq = 0
+
+function logConn(id, entry) {
+  const c = state.conns[id]
+  if (!c) return
+  c.log.push({ id: ++logSeq, ts: Date.now(), ...entry })
+  if (c.log.length > LOG_LIMIT) c.log.splice(0, c.log.length - LOG_LIMIT)
+}
+
+/** Connect the active WebSocket / Socket.IO request. */
+export async function connectRealtime() {
+  const req = activeRequest.value
+  if (!req) return
+  ensureProtocol(req)
+  const id = req.id
+  const protocol = protocolOf(req)
+  disconnectRealtime(id)
+  const resolved = resolveRequest(req, scope.value)
+  const prev = state.conns[id]?.log || []
+  state.conns[id] = { status: 'connecting', protocol, log: prev }
+  logConn(id, { dir: 'info', data: `Connecting to ${resolved.url}${state.mode === 'agent' && protocol === 'ws' ? ' (through the agent)' : ''}…` })
+  const cb = {
+    onOpen: ({ protocol: sub }) => {
+      state.conns[id].status = 'open'
+      state.conns[id].openedAt = Date.now()
+      logConn(id, { dir: 'info', data: `Connected${sub ? ` · ${sub}` : ''}` })
+    },
+    onMessage: ({ event, data, binary }) => logConn(id, { dir: 'in', event, data, binary }),
+    onInfo: (text) => logConn(id, { dir: 'info', data: text }),
+    onError: (text) => logConn(id, { dir: 'error', data: text }),
+    onClose: ({ code, reason }) => {
+      if (!state.conns[id] || state.conns[id].status === 'closed') return
+      state.conns[id].status = 'closed'
+      realtime.delete(id)
+      logConn(id, { dir: 'info', data: `Disconnected${code ? ` (${code}${reason ? `: ${reason}` : ''})` : reason ? ` (${reason})` : ''}` })
+    },
+  }
+  try {
+    if (protocol === 'ws') {
+      const protocols = req.ws.protocols.split(',').map((p) => p.trim()).filter(Boolean)
+      if (state.mode === 'agent') realtime.set(id, connectWsAgent({ url: resolved.url, protocols, headers: resolved.headers }, state.agent.port, cb))
+      else {
+        if (resolved.headers.length) logConn(id, { dir: 'info', data: 'Browsers cannot send custom headers on WebSocket connections; they are ignored. Use Agent mode to send them.' })
+        realtime.set(id, connectWsDirect({ url: resolved.url, protocols }, cb))
+      }
+    } else {
+      const s = req.socketio
+      let auth
+      if (s.auth.trim()) {
+        try {
+          auth = JSON.parse(interpolate(s.auth, scope.value))
+        } catch {
+          throw new Error('Auth payload is not valid JSON (Settings tab).')
+        }
+      }
+      const transports = s.transports === 'polling' ? ['polling', 'websocket'] : ['websocket']
+      if (resolved.headers.length && transports[0] === 'websocket') logConn(id, { dir: 'info', data: 'Custom headers are only sent with the long-polling transport (Settings tab).' })
+      realtime.set(id, await connectSocketIo({ url: resolved.url, headers: resolved.headers, path: s.path, auth, transports }, cb))
+    }
+  } catch (e) {
+    cb.onError(e.message)
+    cb.onClose({ code: 0, reason: '' })
+  }
+}
+
+export function disconnectRealtime(id = activeRequest.value?.id) {
+  realtime.get(id)?.close()
+}
+
+/** Send the composed message (WebSocket) or emit the composed event (Socket.IO). */
+export function sendRealtime(id = activeRequest.value?.id, override) {
+  const req = activeRequest.value?.id === id ? activeRequest.value : state.drafts[id]
+  const handle = realtime.get(id)
+  if (!req || !handle || state.conns[id]?.status !== 'open') return
+  ensureProtocol(req)
+  if (protocolOf(req) === 'ws') {
+    const text = interpolate(override ?? req.ws.message, scope.value)
+    handle.send(text)
+    logConn(id, { dir: 'out', data: text })
+  } else {
+    const s = req.socketio
+    const raw = interpolate(override ?? s.args, scope.value).trim()
+    let args = []
+    if (raw) {
+      try {
+        const v = JSON.parse(raw)
+        args = Array.isArray(v) ? v : [v]
+      } catch {
+        args = [raw] // plain text argument
+      }
+    }
+    const event = interpolate(s.event || 'message', scope.value)
+    handle.send({ event, args, ack: s.ack })
+    logConn(id, { dir: 'out', event, data: args.length === 1 ? args[0] : args })
+  }
+}
+
+export function clearConnLog(id) {
+  if (state.conns[id]) state.conns[id].log = []
 }
 
 export function cancel(id = activeRequest.value?.id) {
@@ -900,6 +1081,7 @@ async function setUser(user) {
 /** Remove the signed-in account's data from this browser (on sign-out / account switch). */
 async function clearLocalData() {
   for (const id of [...controllers.keys()]) cancel(id)
+  for (const id of [...realtime.keys()]) disconnectRealtime(id)
   await flushTimers('') // drop pending debounced saves/syncs of the old data
   await db.transaction('rw', db.collections, db.environments, db.history, db.tombstones, async () => {
     await Promise.all([db.collections.clear(), db.environments.clear(), db.history.clear(), db.tombstones.clear()])
@@ -922,6 +1104,7 @@ async function clearLocalData() {
     active: null,
     activeEnvId: null,
     responses: {},
+    conns: {},
     pending: {},
     errors: {},
   })

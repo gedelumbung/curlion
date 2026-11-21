@@ -16,10 +16,12 @@
 
 import http from 'node:http'
 import https from 'node:https'
+import http2 from 'node:http2'
 import zlib from 'node:zlib'
+import crypto from 'node:crypto'
 import { pipeline } from 'node:stream/promises'
 
-const VERSION = '1.0.0'
+const VERSION = '1.1.0' // 1.1: gRPC (HTTP/2) and WebSocket bridge
 
 // ---- options ----------------------------------------------------------------
 const args = process.argv.slice(2)
@@ -134,6 +136,9 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' })
     return res.end(JSON.stringify({ name: 'curlion-agent', version: VERSION }))
   }
+  if (req.method === 'POST' && path === '/grpc') return handleGrpc(req, res)
+  if (req.method === 'GET' && path === '/ws/connect') return handleWsConnect(req, res)
+  if (req.method === 'POST' && (path === '/ws/send' || path === '/ws/close')) return handleWsCommand(req, res, path)
   if (req.method !== 'POST' || path !== '/proxy') return fail(res, 404, 'Not found')
 
   let target
@@ -199,6 +204,245 @@ const server = http.createServer(async (req, res) => {
     res.destroy()
   }
 })
+
+// ---- gRPC over HTTP/2 -------------------------------------------------------------
+// The browser sends { target: 'host:port', tls, path: '/pkg.Service/Method', metadata: [{key,value}],
+// messages: [base64 protobuf] } and gets back the raw reply frames plus headers/trailers.
+
+async function handleGrpc(req, res) {
+  let input
+  try {
+    input = JSON.parse((await readBody(req)).toString('utf8'))
+  } catch {
+    return fail(res, 400, 'Invalid JSON')
+  }
+  const started = Date.now()
+  const target = String(input.target || '').replace(/^grpcs?:\/\//, '')
+  try {
+    const out = await grpcCall({ ...input, target })
+    log('gRPC', `${target}${input.path}`, `${out.grpcStatus ?? '?'} ${out.grpcMessage || ''}`.trim(), started)
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' })
+    res.end(JSON.stringify({ ...out, time: Date.now() - started }))
+  } catch (err) {
+    const why = describeError(err)
+    log('gRPC', `${target}${input.path}`, `ERROR ${why}`, started)
+    fail(res, 502, `Could not reach ${target}: ${why}`)
+  }
+}
+
+function grpcCall({ target, tls, path, metadata = [], messages = [], timeoutMs = 60_000 }) {
+  return new Promise((resolve, reject) => {
+    const client = http2.connect(`${tls ? 'https' : 'http'}://${target}`, { rejectUnauthorized: STRICT_TLS })
+    let settled = false
+    const done = (fn, v) => {
+      if (settled) return
+      settled = true
+      client.close()
+      fn(v)
+    }
+    client.on('error', (e) => done(reject, e))
+    const headers = { ':method': 'POST', ':path': path, 'content-type': 'application/grpc+proto', te: 'trailers', 'grpc-accept-encoding': 'identity', 'user-agent': `curlion-agent/${VERSION}` }
+    for (const m of metadata) if (m?.key) headers[m.key.toLowerCase()] = String(m.value ?? '')
+    const stream = client.request(headers)
+    stream.setTimeout(timeoutMs, () => stream.close(http2.constants.NGHTTP2_CANCEL))
+    let respHeaders = {}
+    let trailers = {}
+    const chunks = []
+    stream.on('response', (h) => (respHeaders = h))
+    stream.on('trailers', (t) => (trailers = t))
+    stream.on('data', (c) => chunks.push(c))
+    stream.on('error', (e) => done(reject, e))
+    stream.on('close', () => {
+      const data = Buffer.concat(chunks)
+      const replies = []
+      for (let i = 0; i + 5 <= data.length; ) {
+        const compressed = data[i]
+        const len = data.readUInt32BE(i + 1)
+        if (compressed) return done(reject, new Error('compressed gRPC messages are not supported'))
+        replies.push(data.subarray(i + 5, i + 5 + len).toString('base64'))
+        i += 5 + len
+      }
+      const pick = (k) => trailers[k] ?? respHeaders[k]
+      const plain = (h) => Object.entries(h).filter(([k]) => !k.startsWith(':')).map(([key, value]) => ({ key, value: String(value) }))
+      done(resolve, {
+        httpStatus: respHeaders[':status'] || 0,
+        grpcStatus: pick('grpc-status') !== undefined ? Number(pick('grpc-status')) : null,
+        grpcMessage: pick('grpc-message') ? decodeURIComponent(pick('grpc-message')) : '',
+        headers: plain(respHeaders),
+        trailers: plain(trailers),
+        messages: replies,
+      })
+    })
+    for (const b64 of messages) {
+      const body = Buffer.from(b64, 'base64')
+      const prefix = Buffer.alloc(5)
+      prefix.writeUInt32BE(body.length, 1)
+      stream.write(Buffer.concat([prefix, body]))
+    }
+    stream.end()
+  })
+}
+
+// ---- WebSocket bridge --------------------------------------------------------------
+// GET /ws/connect?target&headers&protocols opens the real socket and streams events to the
+// browser as Server-Sent Events; POST /ws/send|/ws/close?id=… drive it.
+
+const sockets = new Map() // id -> { send(text), close() }
+
+function handleWsConnect(req, res) {
+  const q = new URL(req.url, 'http://x').searchParams
+  let target
+  let headers = []
+  try {
+    target = new URL(q.get('target'))
+    headers = JSON.parse(q.get('headers') || '[]')
+  } catch {
+    return fail(res, 400, 'Invalid target or headers')
+  }
+  if (!['ws:', 'wss:'].includes(target.protocol)) return fail(res, 400, 'Only ws:// and wss:// URLs are supported')
+  const protocols = (q.get('protocols') || '').split(',').map((s) => s.trim()).filter(Boolean)
+  res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive' })
+  const emit = (event, data) => res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
+  const id = crypto.randomUUID()
+  const started = Date.now()
+  const ws = wsClient(target, headers, protocols, {
+    open: (protocol) => {
+      sockets.set(id, ws)
+      log('WS', target, 'open', started)
+      emit('open-ws', { id, protocol })
+    },
+    message: (data, binary) => emit('message', binary ? { binary: true, size: data.length } : { data: data.toString('utf8') }),
+    error: (message) => emit('ws-error', { message }),
+    close: (code, reason) => {
+      sockets.delete(id)
+      log('WS', target, `closed ${code}`, started)
+      emit('close-ws', { code, reason })
+      res.end()
+    },
+  })
+  const ping = setInterval(() => res.write(': keep-alive\n\n'), 15_000)
+  res.on('close', () => {
+    clearInterval(ping)
+    if (sockets.has(id)) ws.close(1000, 'browser disconnected')
+  })
+}
+
+async function handleWsCommand(req, res, path) {
+  const id = new URL(req.url, 'http://x').searchParams.get('id')
+  const ws = sockets.get(id)
+  let body = {}
+  try {
+    body = JSON.parse((await readBody(req)).toString('utf8') || '{}')
+  } catch {}
+  if (!ws) return fail(res, 404, 'No such connection')
+  if (path === '/ws/send') ws.send(String(body.data ?? ''))
+  else ws.close(1000, 'Closed by user')
+  res.writeHead(204).end()
+}
+
+/** Minimal RFC 6455 client: handshake with custom headers, masked frames out, ping/pong, close. */
+function wsClient(url, headers, protocols, on) {
+  const key = crypto.randomBytes(16).toString('base64')
+  const reqHeaders = { Connection: 'Upgrade', Upgrade: 'websocket', 'Sec-WebSocket-Key': key, 'Sec-WebSocket-Version': '13' }
+  if (protocols.length) reqHeaders['Sec-WebSocket-Protocol'] = protocols.join(', ')
+  for (const h of headers) if (h?.key && !HOP_BY_HOP.has(h.key.toLowerCase())) reqHeaders[h.key] = String(h.value ?? '')
+  const lib = url.protocol === 'wss:' ? https : http
+  const httpUrl = new URL(url)
+  httpUrl.protocol = url.protocol === 'wss:' ? 'https:' : 'http:'
+  let socket = null
+  let closed = false
+  const finish = (code, reason) => {
+    if (closed) return
+    closed = true
+    socket?.destroy()
+    on.close(code, reason)
+  }
+  const frame = (opcode, payload) => {
+    const len = payload.length
+    const head = len < 126 ? Buffer.from([0x80 | opcode, 0x80 | len]) : len < 65536 ? Buffer.from([0x80 | opcode, 0x80 | 126, len >> 8, len & 255]) : Buffer.concat([Buffer.from([0x80 | opcode, 0x80 | 127]), (() => { const b = Buffer.alloc(8); b.writeBigUInt64BE(BigInt(len)); return b })()])
+    const mask = crypto.randomBytes(4)
+    const body = Buffer.from(payload)
+    for (let i = 0; i < body.length; i++) body[i] ^= mask[i & 3]
+    socket?.write(Buffer.concat([head, mask, body]))
+  }
+  const req = lib.request(httpUrl, { headers: reqHeaders, rejectUnauthorized: STRICT_TLS })
+  req.on('response', (r) => {
+    on.error(`Server answered HTTP ${r.statusCode} instead of switching to WebSocket`)
+    r.resume()
+    finish(1006, `HTTP ${r.statusCode}`)
+  })
+  req.on('error', (e) => {
+    on.error(describeError(e))
+    finish(1006, describeError(e))
+  })
+  req.on('upgrade', (r, sock, head) => {
+    const expected = crypto.createHash('sha1').update(key + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64')
+    if (r.headers['sec-websocket-accept'] !== expected) {
+      on.error('Invalid WebSocket handshake')
+      sock.destroy()
+      return finish(1006, 'bad handshake')
+    }
+    socket = sock
+    on.open(r.headers['sec-websocket-protocol'] || '')
+    let buf = head?.length ? Buffer.from(head) : Buffer.alloc(0)
+    let fragments = []
+    let fragOpcode = 0
+    const parse = () => {
+      while (buf.length >= 2) {
+        const fin = buf[0] & 0x80
+        const opcode = buf[0] & 0x0f
+        let len = buf[1] & 0x7f
+        let off = 2
+        if (len === 126) {
+          if (buf.length < 4) return
+          len = buf.readUInt16BE(2)
+          off = 4
+        } else if (len === 127) {
+          if (buf.length < 10) return
+          len = Number(buf.readBigUInt64BE(2))
+          off = 10
+        }
+        const masked = buf[1] & 0x80
+        if (masked) off += 4
+        if (buf.length < off + len) return
+        const payload = buf.subarray(off, off + len)
+        buf = buf.subarray(off + len)
+        if (opcode === 0x8) {
+          const code = payload.length >= 2 ? payload.readUInt16BE(0) : 1005
+          frame(0x8, payload.subarray(0, 2))
+          return finish(code, payload.subarray(2).toString('utf8'))
+        }
+        if (opcode === 0x9) frame(0xa, payload)
+        else if (opcode === 0x0 || opcode === 0x1 || opcode === 0x2) {
+          if (opcode) fragOpcode = opcode
+          fragments.push(Buffer.from(payload))
+          if (fin) {
+            on.message(Buffer.concat(fragments), fragOpcode === 0x2)
+            fragments = []
+          }
+        }
+      }
+    }
+    sock.on('data', (d) => {
+      buf = Buffer.concat([buf, d])
+      parse()
+    })
+    sock.on('close', () => finish(1006, 'connection closed'))
+    sock.on('error', (e) => on.error(e.message))
+    parse()
+  })
+  req.end()
+  return {
+    send: (text) => frame(0x1, Buffer.from(text, 'utf8')),
+    close: (code = 1000, reason = '') => {
+      const p = Buffer.alloc(2 + Buffer.byteLength(reason))
+      p.writeUInt16BE(code, 0)
+      p.write(reason, 2)
+      frame(0x8, p)
+      setTimeout(() => finish(code, reason), 500)
+    },
+  }
+}
 
 function describeError(err) {
   const code = err.code || err.errors?.[0]?.code

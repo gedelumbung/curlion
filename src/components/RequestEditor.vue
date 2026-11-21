@@ -1,18 +1,22 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
-import { ChevronDown, Code2, Download, Loader2, Plus, Save, Send, Trash2, Wand2 } from 'lucide-vue-next'
+import { ChevronDown, Code2, Download, Loader2, Play, Plug, Plus, Save, Send, Trash2, Unplug, Wand2 } from 'lucide-vue-next'
 import VarInput from './VarInput.vue'
 import UiSelect from './UiSelect.vue'
 import { indentString } from '../lib/settings.js'
 import KeyValueEditor from './KeyValueEditor.vue'
 import CodeEditor from './CodeEditor.vue'
 import SamplesPanel from './SamplesPanel.vue'
-import { activeLoading, activeRequest, activeResponse, cancel, isDirty, isHistoryId, keepTab, persistDrafts, saveNow, send, state, toast } from '../store.js'
-import { METHODS, uid } from '../lib/model.js'
+import GraphqlPanel from './GraphqlPanel.vue'
+import RealtimePanel from './RealtimePanel.vue'
+import GrpcPanel from './GrpcPanel.vue'
+import { parseProto } from '../lib/grpc.js'
+import { activeLoading, activeRequest, activeResponse, cancel, connectRealtime, disconnectRealtime, isDirty, isHistoryId, keepTab, persistDrafts, saveNow, send, state, toast } from '../store.js'
+import { METHODS, PROTOCOLS, ensureProtocol, protocolOf, uid } from '../lib/model.js'
 import { paramsFromUrl, urlFromParams } from '../lib/url.js'
 import { looksLikeCurl, parseCurl } from '../lib/curl.js'
 import { getByPath } from '../lib/variables.js'
-import { methodColor, STANDARD_HEADERS } from '../lib/ui.js'
+import { methodColor, requestBadge, STANDARD_HEADERS } from '../lib/ui.js'
 
 const emit = defineEmits(['show-code'])
 const req = activeRequest
@@ -33,6 +37,54 @@ watch(
 const dirty = computed(() => !!req.value && isDirty(req.value.id))
 const fromHistory = computed(() => !!req.value && isHistoryId(req.value.id)) // opened from History, not in a collection yet
 
+// ---- protocol ----------------------------------------------------------------
+const protocol = computed(() => protocolOf(req.value))
+const protocolOptions = PROTOCOLS.map((p) => ({ value: p.id, label: p.label, class: p.id === 'http' ? '' : requestBadge({ protocol: p.id }).class }))
+watch(() => req.value?.id, () => req.value && ensureProtocol(req.value), { immediate: true })
+function setProtocol(p) {
+  if (p === protocol.value) return
+  req.value.protocol = p
+  ensureProtocol(req.value)
+  tab.value = tabs.value[0].id
+}
+const URL_PLACEHOLDER = {
+  http: 'Enter URL or paste a cURL command',
+  graphql: 'https://api.example.com/graphql',
+  ws: 'wss://example.com/socket',
+  socketio: 'http://localhost:3000',
+  grpc: 'localhost:50051  (grpcs:// for TLS)',
+}
+const conn = computed(() => state.conns[req.value?.id] || null)
+
+// gRPC method picker (from the .proto text)
+const grpcOptions = ref([])
+watch(
+  () => (protocol.value === 'grpc' ? req.value.grpc?.proto : null),
+  async (text) => {
+    grpcOptions.value = []
+    if (!text?.trim()) return
+    try {
+      const parsed = await parseProto(text)
+      grpcOptions.value = parsed.services.flatMap((s) =>
+        s.methods.map((m) => ({
+          value: `${s.fullName}/${m.name}`,
+          label: `${s.name}/${m.name}`,
+          hint: m.requestStream && m.responseStream ? 'bidi' : m.requestStream ? 'client stream' : m.responseStream ? 'server stream' : 'unary',
+        })),
+      )
+    } catch {}
+  },
+  { immediate: true },
+)
+const grpcMethod = computed({
+  get: () => (req.value.grpc?.service ? `${req.value.grpc.service}/${req.value.grpc.method}` : ''),
+  set: (v) => {
+    const i = v.lastIndexOf('/')
+    req.value.grpc.service = v.slice(0, i)
+    req.value.grpc.method = v.slice(i + 1)
+  },
+})
+
 const methodOptions = METHODS.map((m) => ({ value: m, label: m, class: `font-mono font-semibold ${methodColor[m]}` }))
 const AUTH_TYPES = [
   { value: 'none', label: 'No Auth' },
@@ -49,14 +101,14 @@ const RAW_TYPES = ['json', 'text', 'xml', 'html'].map((v) => ({ value: v, label:
 // ---- URL <-> Params two-way sync -----------------------------------------
 function onUrlInput(val) {
   req.value.url = val
-  req.value.params = paramsFromUrl(val, req.value.params)
+  if (protocol.value !== 'grpc') req.value.params = paramsFromUrl(val, req.value.params)
 }
 function onParamsChange() {
   req.value.url = urlFromParams(req.value.url, req.value.params)
 }
 
 function onUrlPaste(payload) {
-  if (!looksLikeCurl(payload.text)) return
+  if (protocol.value !== 'http' || !looksLikeCurl(payload.text)) return
   payload.handled = true
   try {
     applyCurl(payload.text)
@@ -118,6 +170,10 @@ const counts = computed(() => {
   return {
     params: n(r.params),
     headers: n(r.headers),
+    metadata: n(r.headers),
+    query: r.graphql?.query?.trim() ? '•' : '',
+    variables: r.graphql?.variables?.trim() ? '•' : '',
+    proto: r.grpc?.proto?.trim() ? '•' : '',
     body: r.body.mode !== 'none' ? '•' : '',
     auth: r.auth.type !== 'none' ? '•' : '',
     extract: r.extract.filter((x) => x.enabled !== false && x.path).length,
@@ -126,15 +182,34 @@ const counts = computed(() => {
   }
 })
 
-const tabs = [
-  { id: 'params', label: 'Params' },
-  { id: 'auth', label: 'Auth' },
-  { id: 'headers', label: 'Headers' },
-  { id: 'body', label: 'Body' },
-  { id: 'extract', label: 'Post-Response' },
-  { id: 'samples', label: 'Samples / Mock' },
-  { id: 'docs', label: 'Docs' },
-]
+const T = {
+  params: { id: 'params', label: 'Params' },
+  auth: { id: 'auth', label: 'Auth' },
+  headers: { id: 'headers', label: 'Headers' },
+  body: { id: 'body', label: 'Body' },
+  extract: { id: 'extract', label: 'Post-Response' },
+  samples: { id: 'samples', label: 'Samples / Mock' },
+  docs: { id: 'docs', label: 'Docs' },
+  query: { id: 'query', label: 'Query' },
+  variables: { id: 'variables', label: 'Variables' },
+  schema: { id: 'schema', label: 'Schema' },
+  message: { id: 'message', label: 'Message' },
+  settings: { id: 'settings', label: 'Settings' },
+  metadata: { id: 'metadata', label: 'Metadata' },
+  proto: { id: 'proto', label: 'Proto' },
+}
+const TABS = {
+  http: ['params', 'auth', 'headers', 'body', 'extract', 'samples', 'docs'],
+  graphql: ['query', 'variables', 'schema', 'headers', 'auth', 'extract', 'docs'],
+  ws: ['message', 'params', 'headers', 'auth', 'settings', 'docs'],
+  socketio: ['message', 'headers', 'settings', 'docs'],
+  grpc: ['message', 'metadata', 'auth', 'proto', 'settings', 'docs'],
+}
+const tabs = computed(() => (TABS[protocol.value] || TABS.http).map((id) => T[id]))
+// switching to a request of another protocol: show its first tab
+watch(protocol, () => {
+  if (!tabs.value.some((t) => t.id === tab.value)) tab.value = tabs.value[0].id
+}, { immediate: true })
 
 defineExpose({ applyCurl })
 </script>
@@ -170,29 +245,59 @@ defineExpose({ applyCurl })
     <!-- URL bar -->
     <div class="flex items-stretch gap-2 px-4 py-2">
       <div class="flex min-w-0 flex-1 items-stretch rounded-md border border-zinc-700 bg-zinc-900 focus-within:border-zinc-500">
-        <UiSelect v-model="req.method" :options="methodOptions" class="w-28 shrink-0" button-class="rounded-l-md border-r border-zinc-700 bg-zinc-900 px-3 text-sm font-semibold" />
+        <UiSelect
+          :model-value="protocol"
+          :options="protocolOptions"
+          class="w-28 shrink-0"
+          button-class="rounded-l-md border-r border-zinc-700 bg-zinc-900 px-3 text-xs font-semibold"
+          title="Request type"
+          @update:model-value="setProtocol"
+        />
+        <UiSelect v-if="protocol === 'http'" v-model="req.method" :options="methodOptions" class="w-28 shrink-0" button-class="border-r border-zinc-700 bg-zinc-900 px-3 text-sm font-semibold" />
         <VarInput
           :model-value="req.url"
           class="flex-1 self-center px-3 py-2"
-          placeholder="Enter URL or paste a cURL command"
+          :placeholder="URL_PLACEHOLDER[protocol]"
           @update:model-value="onUrlInput"
           @enter="doSend()"
           @paste-text="onUrlPaste"
         />
+        <UiSelect
+          v-if="protocol === 'grpc'"
+          v-model="grpcMethod"
+          :options="grpcOptions"
+          placeholder="Select method"
+          class="w-60 shrink-0"
+          menu-width="22rem"
+          button-class="border-l border-zinc-700 bg-zinc-900 px-3 font-mono text-xs"
+          title="Service method (from the Proto tab)"
+        />
       </div>
-      <div class="relative flex">
+      <!-- WebSocket / Socket.IO: connect -->
+      <button
+        v-if="protocol === 'ws' || protocol === 'socketio'"
+        class="inline-flex min-w-32 items-center justify-center gap-2 rounded-md px-4 text-sm font-semibold"
+        :class="conn?.status === 'open' || conn?.status === 'connecting' ? 'bg-zinc-800 text-zinc-100 hover:bg-zinc-700' : 'bg-orange-500 text-on-accent hover:bg-orange-600'"
+        @click="conn?.status === 'open' || conn?.status === 'connecting' ? disconnectRealtime(req.id) : connectRealtime()"
+      >
+        <template v-if="conn?.status === 'connecting'"><Loader2 :size="15" class="animate-spin" /> Cancel</template>
+        <template v-else-if="conn?.status === 'open'"><Unplug :size="15" /> Disconnect</template>
+        <template v-else><Plug :size="15" /> Connect</template>
+      </button>
+      <div v-else class="relative flex">
         <button
           v-if="!activeLoading"
-          class="inline-flex items-center gap-2 rounded-l-md bg-orange-500 px-4 text-sm font-semibold text-on-accent hover:bg-orange-600"
+          class="inline-flex items-center gap-2 bg-orange-500 px-4 text-sm font-semibold text-on-accent hover:bg-orange-600"
+          :class="protocol === 'http' ? 'rounded-l-md' : 'rounded-md'"
           title="Send (Ctrl+Enter)"
           @click="doSend()"
         >
-          <Send :size="15" /> Send
+          <Play v-if="protocol === 'grpc'" :size="15" /><Send v-else :size="15" /> {{ protocol === 'grpc' ? 'Invoke' : 'Send' }}
         </button>
-        <button v-else class="inline-flex items-center gap-2 rounded-l-md bg-zinc-700 px-4 text-sm font-semibold text-zinc-100 hover:bg-zinc-600" @click="cancel()">
+        <button v-else class="inline-flex items-center gap-2 bg-zinc-700 px-4 text-sm font-semibold text-zinc-100 hover:bg-zinc-600" :class="protocol === 'http' ? 'rounded-l-md' : 'rounded-md'" @click="cancel()">
           <Loader2 :size="15" class="animate-spin" /> Cancel
         </button>
-        <button class="rounded-r-md border-l border-orange-700 bg-orange-500 px-1.5 text-on-accent hover:bg-orange-600" @click="sendMenu = !sendMenu">
+        <button v-if="protocol === 'http'" class="rounded-r-md border-l border-orange-700 bg-orange-500 px-1.5 text-on-accent hover:bg-orange-600" @click="sendMenu = !sendMenu">
           <ChevronDown :size="15" />
         </button>
         <div v-if="sendMenu" class="absolute top-full right-0 z-20 mt-1 w-48 rounded-md border border-zinc-700 bg-zinc-800 py-1 shadow-xl" @mouseleave="sendMenu = false">
@@ -219,8 +324,19 @@ defineExpose({ applyCurl })
     </nav>
 
     <div class="min-h-0 flex-1 overflow-auto py-2">
+      <!-- GraphQL -->
+      <GraphqlPanel v-if="protocol === 'graphql' && ['query', 'variables', 'schema'].includes(tab)" :request="req" :view="tab" class="h-full" @view="tab = $event" />
+      <!-- WebSocket / Socket.IO -->
+      <RealtimePanel v-else-if="(protocol === 'ws' || protocol === 'socketio') && ['message', 'settings'].includes(tab)" :request="req" :view="tab" class="h-full" />
+      <!-- gRPC -->
+      <GrpcPanel v-else-if="protocol === 'grpc' && ['message', 'proto', 'settings'].includes(tab)" :request="req" :view="tab" class="h-full" />
+      <div v-else-if="tab === 'metadata'">
+        <KeyValueEditor :rows="req.headers" key-placeholder="metadata key" />
+        <p class="px-4 pt-2 text-xs text-zinc-600">gRPC metadata (sent as HTTP/2 headers). Keys are lower-cased.</p>
+      </div>
+
       <!-- Params -->
-      <div v-if="tab === 'params'">
+      <div v-else-if="tab === 'params'">
         <p class="px-4 pb-1 text-xs text-zinc-500">Query Params</p>
         <KeyValueEditor :rows="req.params" @change="onParamsChange" />
       </div>

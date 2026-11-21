@@ -62,9 +62,10 @@ function mapBody(pmBody, req) {
         : kv(f.key, f.value ?? '', { type: 'text', enabled: !f.disabled }),
     )
   } else if (pmBody.mode === 'graphql') {
-    req.body.mode = 'raw'
-    req.body.rawType = 'json'
-    req.body.raw = JSON.stringify({ query: pmBody.graphql?.query || '', variables: tryJson(pmBody.graphql?.variables) || {} }, null, 2)
+    // a GraphQL request in Curlion (Query / Variables tabs)
+    req.protocol = 'graphql'
+    req.method = 'POST'
+    req.graphql = { query: pmBody.graphql?.query || '', variables: pmBody.graphql?.variables || '' }
   }
 }
 
@@ -190,7 +191,8 @@ function exportNode(n) {
   }
   const auth = exportAuth(n.auth)
   if (auth) request.auth = auth
-  const body = exportBody(n.body)
+  const body = n.protocol === 'graphql' ? { mode: 'graphql', graphql: { query: n.graphql?.query || '', variables: n.graphql?.variables || '' } } : exportBody(n.body)
+  if (n.protocol === 'graphql') request.method = 'POST'
   if (body) request.body = body
   return {
     name: n.name,

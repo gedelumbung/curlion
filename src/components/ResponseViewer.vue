@@ -54,10 +54,10 @@ function saveAsSample() {
             {{ t }}<span v-if="t === 'headers'" class="ml-1 text-zinc-500">{{ res.headers.length }}</span>
           </button>
         </nav>
-        <span class="ml-auto font-mono text-xs" :class="statusColor(res.status)">{{ res.status }} {{ res.statusText }}</span>
+        <span class="ml-auto font-mono text-xs" :class="statusColor(res.status, res.grpc)" :title="res.grpc && res.message ? res.message : undefined">{{ res.status }} {{ res.statusText }}</span>
         <span class="font-mono text-xs text-zinc-400">{{ res.time }} ms</span>
         <span class="font-mono text-xs text-zinc-400">{{ formatSize(res.size) }}</span>
-        <button v-if="!isHistoryId(activeRequest?.id)" class="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100" title="Save as Sample / Mock" @click="saveAsSample">
+        <button v-if="!isHistoryId(activeRequest?.id) && !res.grpc" class="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100" title="Save as Sample / Mock" @click="saveAsSample">
           <Save :size="13" /> Save as Sample
         </button>
       </template>

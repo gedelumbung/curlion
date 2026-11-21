@@ -8,7 +8,24 @@ export const methodColor = {
   HEAD: 'text-teal-400',
 }
 
-export function statusColor(code) {
+/** Short coloured label shown for a request in lists and tabs: its method, or its protocol. */
+const PROTOCOL_BADGE = {
+  graphql: { label: 'GQL', class: 'text-pink-400' },
+  ws: { label: 'WS', class: 'text-teal-400' },
+  socketio: { label: 'SIO', class: 'text-sky-400' },
+  grpc: { label: 'gRPC', class: 'text-violet-400' },
+}
+const SHORT_METHOD = { DELETE: 'DEL', OPTIONS: 'OPT' }
+export function requestBadge(req, { short = false } = {}) {
+  const p = PROTOCOL_BADGE[req?.protocol]
+  if (p) return p
+  const m = req?.method || 'GET'
+  return { label: short ? SHORT_METHOD[m] || m : m, class: methodColor[m] }
+}
+
+/** Status colour for HTTP codes, or for gRPC status codes when grpc is true. */
+export function statusColor(code, grpc = false) {
+  if (grpc) return code === 0 ? 'text-emerald-400' : 'text-red-400'
   if (code >= 500) return 'text-red-400'
   if (code >= 400) return 'text-orange-400'
   if (code >= 300) return 'text-sky-400'
