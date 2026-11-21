@@ -1,7 +1,7 @@
--- Sign-in only: no anonymous access to any Beacon data. Run after 003_grants.sql.
+-- Sign-in only: no anonymous access to any Curlion data. Run after 003_grants.sql.
 --
 -- - Published docs (/docs/<slug>) can be read by any signed-in user, not by anonymous visitors.
--- - The anon role loses every privilege on Beacon's tables and functions.
+-- - The anon role loses every privilege on Curlion's tables and functions.
 -- - The mock endpoint (/mock/*) reads with the service role key on the server.
 -- Safe to run more than once.
 

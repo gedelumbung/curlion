@@ -1,7 +1,7 @@
 // Netlify Edge Function: CORS proxy.
-// The browser POSTs to /api/proxy with the target in X-Beacon-* headers and the
+// The browser POSTs to /api/proxy with the target in X-Curlion-* headers and the
 // request body as-is. We forward it and return the upstream response, always with
-// HTTP 200; the real status and headers travel in X-Beacon-* response headers
+// HTTP 200; the real status and headers travel in X-Curlion-* response headers
 // (so 204/304/1xx and opaque headers survive the hop).
 
 const HOP_BY_HOP = new Set([
@@ -20,7 +20,7 @@ const HOP_BY_HOP = new Set([
 const PRIVATE_HOST = /^(localhost|0\.0\.0\.0|127\.|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.|\[?::1\]?$|\[?f[cd][0-9a-f]{2}:)/i
 
 const fail = (status, message) =>
-  new Response(message, { status, headers: { 'X-Beacon-Error': '1', 'Content-Type': 'text/plain' } })
+  new Response(message, { status, headers: { 'X-Curlion-Error': '1', 'Content-Type': 'text/plain' } })
 
 export default async (request) => {
   if (request.method !== 'POST') return fail(405, 'Use POST')
@@ -30,13 +30,13 @@ export default async (request) => {
   const self = new URL(request.url).origin
   if (origin && origin !== self) return fail(403, 'Cross-origin use of the proxy is not allowed')
 
-  const target = request.headers.get('x-beacon-url')
-  const method = (request.headers.get('x-beacon-method') || 'GET').toUpperCase()
+  const target = request.headers.get('x-curlion-url')
+  const method = (request.headers.get('x-curlion-method') || 'GET').toUpperCase()
   let headers = []
   try {
-    headers = JSON.parse(decodeURIComponent(request.headers.get('x-beacon-headers') || '%5B%5D'))
+    headers = JSON.parse(decodeURIComponent(request.headers.get('x-curlion-headers') || '%5B%5D'))
   } catch {
-    return fail(400, 'Invalid X-Beacon-Headers')
+    return fail(400, 'Invalid X-Curlion-Headers')
   }
 
   let url
@@ -80,9 +80,9 @@ export default async (request) => {
   upstream.headers.forEach((value, key) => respHeaders.push({ key, value }))
 
   const res = new Headers({
-    'X-Beacon-Status': String(upstream.status),
-    'X-Beacon-Status-Text': upstream.statusText || '',
-    'X-Beacon-Headers': encodeURIComponent(JSON.stringify(respHeaders)),
+    'X-Curlion-Status': String(upstream.status),
+    'X-Curlion-Status-Text': upstream.statusText || '',
+    'X-Curlion-Headers': encodeURIComponent(JSON.stringify(respHeaders)),
     'Cache-Control': 'no-store',
   })
   const ct = upstream.headers.get('content-type')

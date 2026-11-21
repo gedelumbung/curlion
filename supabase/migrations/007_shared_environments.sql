@@ -42,7 +42,7 @@ create trigger environments_keep_owner before update on public.environments
   for each row execute function public.keep_environment_owner();
 
 -- Until now environments were private, so secret variables may hold real tokens or
--- passwords. Blank them before they become visible to everyone. (Beacon also moves
+-- passwords. Blank them before they become visible to everyone. (Curlion also moves
 -- each user's secret values into their browser's current values on next launch.)
 update public.environments e
    set variables = (

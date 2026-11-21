@@ -9,7 +9,7 @@ import { generateSnippet, SNIPPET_LANGS } from '../lib/snippets.js'
 import { copyText } from '../lib/ui.js'
 
 const emit = defineEmits(['close'])
-const lang = ref(localStorage.getItem('beacon.snippetLang') || 'curl')
+const lang = ref(localStorage.getItem('curlion.snippetLang') || 'curl')
 const maskSecrets = ref(true)
 
 const code = computed(() => {
@@ -21,7 +21,7 @@ const code = computed(() => {
 function pick(id) {
   lang.value = id
   try {
-    localStorage.setItem('beacon.snippetLang', id)
+    localStorage.setItem('curlion.snippetLang', id)
   } catch {}
 }
 async function copy() {

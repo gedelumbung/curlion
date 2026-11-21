@@ -1,4 +1,9 @@
-# Beacon
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="public/brand/curlion-logo-dark.svg">
+  <img src="public/brand/curlion-logo-light.svg" alt="Curlion" width="300">
+</picture>
+
+# Curlion
 
 A web-based API client (a lightweight Postman alternative) with **local-first storage** (IndexedDB), optional sync to **Supabase**, and **Netlify Edge Functions** for a CORS proxy and mock endpoints. Target cost: $0 (free tiers).
 
@@ -14,7 +19,7 @@ npm run build
 ```
 
 Without a `.env` file the app runs **local only**: all data is stored in the browser's IndexedDB.
-With Supabase configured, Beacon is **sign-in only**: the app, the docs pages and the mock data are not available to anonymous visitors.
+With Supabase configured, Curlion is **sign-in only**: the app, the docs pages and the mock data are not available to anonymous visitors.
 
 To try **Proxy mode** and the **mock endpoint** locally, use the Netlify CLI:
 
@@ -53,7 +58,7 @@ netlify dev        # runs Vite + edge functions at /api/proxy and /mock/*
 | Response: colored status, time (ms), size, headers, Pretty/Tree/Raw, Copy | ✅ |
 | Send and Download + automatic binary response detection (`Content-Disposition`, pdf/zip/images) | ✅ |
 | Direct Browser Mode & Netlify Proxy Mode (localhost is blocked by the proxy, with a clear message) | ✅ |
-| **Agent Mode** (like Postman's Desktop Agent): requests go through the Beacon Agent on your computer, so they reach localhost / your local network, skip CORS and can set Cookie/Host/User-Agent | ✅ |
+| **Agent Mode** (like Postman's Desktop Agent): requests go through the Curlion Agent on your computer, so they reach localhost / your local network, skip CORS and can set Cookie/Host/User-Agent | ✅ |
 | Live sidebar search (name/folder/URL), request history | ✅ |
 | Import Postman Collection v2.1 (folders, auth, body, saved responses → samples, variables → environment) | ✅ |
 | Export a collection to Postman v2.1 JSON | ✅ |
@@ -119,26 +124,26 @@ src/
     theme.js            light/dark theme
   components/           UI (Sidebar, RequestEditor, ResponseViewer, modals)
 netlify/edge-functions/
-  proxy.js              CORS proxy (POST /api/proxy, target in X-Beacon-* headers)
+  proxy.js              CORS proxy (POST /api/proxy, target in X-Curlion-* headers)
   mock.js               mock endpoint (reads with the service role key)
 supabase/migrations/    SQL schema + RLS (001 base, 002 docs/collaboration, 003 grants, 004 sign-in only, 005 invite message, 006 team workspace, 007 shared environments)
 tests/                  unit tests (node:test)
 ```
 
-## Beacon Agent (localhost access)
+## Curlion Agent (localhost access)
 
-Browsers cannot send requests from a website to your `localhost` without CORS, and the cloud proxy cannot reach your computer at all. The agent is a small zero-dependency Node.js script ([`public/beacon-agent.mjs`](public/beacon-agent.mjs)) that sends requests for Beacon from your machine, like Postman's Desktop Agent.
+Browsers cannot send requests from a website to your `localhost` without CORS, and the cloud proxy cannot reach your computer at all. The agent is a small zero-dependency Node.js script ([`public/curlion-agent.mjs`](public/curlion-agent.mjs)) that sends requests for Curlion from your machine, like Postman's Desktop Agent.
 
 ```bash
-# Node.js 18+; the site serves the script at /beacon-agent.mjs
-curl -fsSLO https://<your-site>/beacon-agent.mjs
-node beacon-agent.mjs --origin https://<your-site>
+# Node.js 18+; the site serves the script at /curlion-agent.mjs
+curl -fsSLO https://<your-site>/curlion-agent.mjs
+node curlion-agent.mjs --origin https://<your-site>
 # local development: npm run agent   (allows http://localhost:5173)
 ```
 
 Then pick **Agent** in the header (the dot is green when the agent is running; click it again for setup). Chrome may ask to let the site access your local network: choose Allow.
 
-- Listens on `127.0.0.1:5577` only (`--port` to change; set the same port in Beacon's Agent setup).
+- Listens on `127.0.0.1:5577` only (`--port` to change; set the same port in Curlion's Agent setup).
 - Accepts requests only from the `--origin` site(s), checked on every request and CORS preflight; other `Host` headers are rejected (DNS rebinding).
 - Follows redirects, decodes gzip/deflate/br, keeps multipart boundaries, accepts self-signed HTTPS certificates (`--strict-tls` to verify them).
 - Logs each request in the terminal.

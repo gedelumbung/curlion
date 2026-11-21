@@ -1,10 +1,10 @@
-// Factories for Beacon's internal data model.
+// Factories for Curlion's internal data model.
 // Collection.items holds a tree of folders and requests; this tree is what
 // gets stored in Supabase `collections.tree_data` (as { items }).
 
 /**
  * Random UUID v4. crypto.randomUUID only exists in secure contexts (https / localhost),
- * so fall back to getRandomValues when Beacon is served over plain http on a LAN host.
+ * so fall back to getRandomValues when Curlion is served over plain http on a LAN host.
  */
 export function uid() {
   if (typeof crypto.randomUUID === 'function') return crypto.randomUUID()

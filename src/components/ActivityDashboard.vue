@@ -125,7 +125,7 @@ function exportCsv() {
     lines.push([l.created_at, l.actor_email, ACTIONS[l.action] || l.action, collectionLabel(l) || '', l.target_name, describeLog(l)].map(esc).join(','))
   }
   const url = URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/csv' }))
-  const a = Object.assign(document.createElement('a'), { href: url, download: `beacon-activity-${new Date().toISOString().slice(0, 10)}.csv` })
+  const a = Object.assign(document.createElement('a'), { href: url, download: `curlion-activity-${new Date().toISOString().slice(0, 10)}.csv` })
   a.click()
   URL.revokeObjectURL(url)
 }

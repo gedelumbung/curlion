@@ -1,5 +1,5 @@
 {
-  "name": "beacon",
+  "name": "curlion",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -8,7 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "node --test tests/*.test.js",
-    "agent": "node public/beacon-agent.mjs --origin http://localhost:5173"
+    "agent": "node public/curlion-agent.mjs --origin http://localhost:5173"
   },
   "engines": {
     "node": ">=20"

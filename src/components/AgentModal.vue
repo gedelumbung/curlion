@@ -1,4 +1,4 @@
-<!-- Beacon Agent: status and setup instructions. -->
+<!-- Curlion Agent: status and setup instructions. -->
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { Check, CheckCircle2, Copy, Loader2, RefreshCw, XCircle } from 'lucide-vue-next'
@@ -15,8 +15,8 @@ const copied = ref(null)
 const origin = location.origin
 const portArg = computed(() => (Number(port.value) === AGENT_DEFAULT_PORT ? '' : ` --port ${port.value}`))
 const commands = computed(() => [
-  { id: 'unix', label: 'macOS / Linux', text: `curl -fsSLO ${origin}/beacon-agent.mjs && node beacon-agent.mjs --origin ${origin}${portArg.value}` },
-  { id: 'win', label: 'Windows (PowerShell)', text: `iwr ${origin}/beacon-agent.mjs -OutFile beacon-agent.mjs; node beacon-agent.mjs --origin ${origin}${portArg.value}` },
+  { id: 'unix', label: 'macOS / Linux', text: `curl -fsSLO ${origin}/curlion-agent.mjs && node curlion-agent.mjs --origin ${origin}${portArg.value}` },
+  { id: 'win', label: 'Windows (PowerShell)', text: `iwr ${origin}/curlion-agent.mjs -OutFile curlion-agent.mjs; node curlion-agent.mjs --origin ${origin}${portArg.value}` },
 ])
 
 async function check() {
@@ -44,10 +44,10 @@ function useAgent() {
 </script>
 
 <template>
-  <Modal title="Beacon Agent" width="max-w-2xl" @close="emit('close')">
+  <Modal title="Curlion Agent" width="max-w-2xl" @close="emit('close')">
     <div class="space-y-5 p-4 text-sm">
       <p class="text-zinc-400">
-        The agent is a small program you run on your computer. In <b class="text-zinc-200">Agent mode</b>, Beacon sends requests through it, so they can reach
+        The agent is a small program you run on your computer. In <b class="text-zinc-200">Agent mode</b>, Curlion sends requests through it, so they can reach
         <code class="text-zinc-300">localhost</code>, your local network and APIs that do not allow CORS, and can set headers browsers block (Cookie, Host, User-Agent).
       </p>
 
@@ -80,7 +80,7 @@ function useAgent() {
               </button>
             </div>
           </div>
-          <p class="mt-2 text-xs text-zinc-500">Keep that terminal open while you work. Next time, only the <code>node beacon-agent.mjs …</code> part is needed.</p>
+          <p class="mt-2 text-xs text-zinc-500">Keep that terminal open while you work. Next time, only the <code>node curlion-agent.mjs …</code> part is needed.</p>
         </li>
         <li>
           If the browser asks to let this site <b class="text-zinc-200">access devices on your local network</b>, choose <b class="text-zinc-200">Allow</b>.

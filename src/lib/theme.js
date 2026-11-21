@@ -2,7 +2,7 @@
 // remaps under [data-theme="light"], so switching only flips this attribute.
 import { ref, watch } from 'vue'
 
-const KEY = 'beacon.theme'
+const KEY = 'curlion.theme'
 
 function initial() {
   try {

@@ -7,7 +7,7 @@ import Sidebar from './components/Sidebar.vue'
 import RequestEditor from './components/RequestEditor.vue'
 import TabBar from './components/TabBar.vue'
 import CollectionOverview from './components/CollectionOverview.vue'
-import BeaconLogo from './components/BeaconLogo.vue'
+import CurlionLogo from './components/CurlionLogo.vue'
 import ResponseViewer from './components/ResponseViewer.vue'
 import EnvironmentModal from './components/EnvironmentModal.vue'
 import ImportModal from './components/ImportModal.vue'
@@ -62,8 +62,8 @@ function saveNum(key, n) {
   } catch {}
 }
 const clamp = (n, min, max) => Math.min(max, Math.max(min, n))
-const sidebarWidth = ref(loadNum('beacon.sidebarWidth', SIDEBAR_DEFAULT))
-const split = ref(loadNum('beacon.split', SPLIT_DEFAULT)) // request editor share of the main column
+const sidebarWidth = ref(loadNum('curlion.sidebarWidth', SIDEBAR_DEFAULT))
+const split = ref(loadNum('curlion.split', SPLIT_DEFAULT)) // request editor share of the main column
 const mainEl = ref(null)
 const dragging = ref(null) // 'sidebar' | 'split'
 
@@ -82,15 +82,15 @@ function startDrag(kind, e) {
     dragging.value = null
     window.removeEventListener('pointermove', move)
     window.removeEventListener('pointerup', up)
-    saveNum('beacon.sidebarWidth', sidebarWidth.value)
-    saveNum('beacon.split', split.value)
+    saveNum('curlion.sidebarWidth', sidebarWidth.value)
+    saveNum('curlion.split', split.value)
   }
   window.addEventListener('pointermove', move)
   window.addEventListener('pointerup', up)
 }
 function resetPane(kind) {
-  if (kind === 'sidebar') saveNum('beacon.sidebarWidth', (sidebarWidth.value = SIDEBAR_DEFAULT))
-  else saveNum('beacon.split', (split.value = SPLIT_DEFAULT))
+  if (kind === 'sidebar') saveNum('curlion.sidebarWidth', (sidebarWidth.value = SIDEBAR_DEFAULT))
+  else saveNum('curlion.split', (split.value = SPLIT_DEFAULT))
 }
 
 function onKey(e) {
@@ -131,8 +131,8 @@ const syncLabel = {
     <!-- Top bar -->
     <header :inert="!!modal" class="flex h-12 shrink-0 items-center gap-3 border-b border-zinc-800 px-3">
       <button class="flex items-center gap-2 font-semibold" title="Toggle sidebar" @click="sidebarOpen = !sidebarOpen">
-        <BeaconLogo class="h-6 w-6 text-zinc-100" />
-        <span class="hidden sm:inline">Beacon</span>
+        <CurlionLogo class="h-6 w-6 text-zinc-100" />
+        <span class="hidden sm:inline">Curlion</span>
       </button>
 
       <div class="ml-auto flex items-center gap-2 text-sm">
@@ -147,7 +147,7 @@ const syncLabel = {
           <button
             class="inline-flex items-center gap-1 rounded px-2 py-1"
             :class="state.mode === 'agent' ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-400 hover:text-zinc-200'"
-            :title="state.mode === 'agent' ? `Agent mode: ${state.agent.status === 'online' ? 'agent running' : 'agent not running'}. Click for setup.` : 'Agent mode: send from your computer through the Beacon Agent (localhost, local network, no CORS)'"
+            :title="state.mode === 'agent' ? `Agent mode: ${state.agent.status === 'online' ? 'agent running' : 'agent not running'}. Click for setup.` : 'Agent mode: send from your computer through the Curlion Agent (localhost, local network, no CORS)'"
             @click="pickAgent"
           >
             <Laptop :size="13" /> Agent
@@ -237,7 +237,7 @@ const syncLabel = {
         </div>
         <CollectionOverview v-else-if="activeOverview" :key="activeOverview.id" :collection="activeOverview" @collection="openCollection" />
         <div v-else class="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center text-zinc-500">
-          <BeaconLogo class="h-12 w-12 text-zinc-100 opacity-60" />
+          <CurlionLogo class="h-12 w-12 text-zinc-100 opacity-60" />
           <p>Select a request from the sidebar, or</p>
           <div class="flex gap-2">
             <button class="rounded bg-orange-500 px-4 py-1.5 text-sm font-medium text-white hover:bg-orange-600" @click="addNewRequest">New request</button>

@@ -1,12 +1,12 @@
 #!/usr/bin/env node
-// Beacon Agent: lets the Beacon web app send requests from *your* computer, so it can
+// Curlion Agent: lets the Curlion web app send requests from *your* computer, so it can
 // reach localhost, your local network and APIs without CORS (like Postman's Desktop Agent).
 //
-//   node beacon-agent.mjs --origin https://your-beacon-site.netlify.app
+//   node curlion-agent.mjs --origin https://your-curlion-site.netlify.app
 //
 // Options
-//   --origin <url>   Beacon site allowed to use this agent (repeatable). Required.
-//   --port <n>       Port to listen on (default 5577). Beacon must use the same port.
+//   --origin <url>   Curlion site allowed to use this agent (repeatable). Required.
+//   --port <n>       Port to listen on (default 5577). Curlion must use the same port.
 //   --strict-tls     Reject self-signed / invalid TLS certificates (default: accepted,
 //                    since local HTTPS APIs often use them).
 //
@@ -25,33 +25,33 @@ const VERSION = '1.0.0'
 const args = process.argv.slice(2)
 const opt = (name) => args.flatMap((a, i) => (a === name ? [args[i + 1]] : a.startsWith(name + '=') ? [a.slice(name.length + 1)] : []))
 const origins = new Set(
-  [...opt('--origin'), ...(process.env.BEACON_AGENT_ORIGINS || '').split(',')]
+  [...opt('--origin'), ...(process.env.CURLION_AGENT_ORIGINS || '').split(',')]
     .map((o) => o?.trim().replace(/\/+$/, ''))
     .filter(Boolean),
 )
-const PORT = Number(opt('--port')[0] || process.env.BEACON_AGENT_PORT || 5577)
+const PORT = Number(opt('--port')[0] || process.env.CURLION_AGENT_PORT || 5577)
 const STRICT_TLS = args.includes('--strict-tls')
 
 if (args.includes('--help') || args.includes('-h')) {
-  console.log('Usage: node beacon-agent.mjs --origin https://your-beacon-site [--port 5577] [--strict-tls]')
+  console.log('Usage: node curlion-agent.mjs --origin https://your-curlion-site [--port 5577] [--strict-tls]')
   process.exit(0)
 }
 if (!origins.size) {
-  console.error('Beacon Agent: pass the Beacon site that may use this agent, e.g.\n  node beacon-agent.mjs --origin https://your-beacon-site.netlify.app')
+  console.error('Curlion Agent: pass the Curlion site that may use this agent, e.g.\n  node curlion-agent.mjs --origin https://your-curlion-site.netlify.app')
   process.exit(1)
 }
 for (const o of origins) {
   try {
     new URL(o)
   } catch {
-    console.error(`Beacon Agent: invalid --origin "${o}"`)
+    console.error(`Curlion Agent: invalid --origin "${o}"`)
     process.exit(1)
   }
 }
 
 // ---- helpers ----------------------------------------------------------------
 const HOP_BY_HOP = new Set(['connection', 'keep-alive', 'proxy-authenticate', 'proxy-authorization', 'te', 'trailer', 'transfer-encoding', 'upgrade', 'content-length'])
-const EXPOSE = 'X-Beacon-Status, X-Beacon-Status-Text, X-Beacon-Headers, X-Beacon-Error, Content-Disposition'
+const EXPOSE = 'X-Curlion-Status, X-Curlion-Status-Text, X-Curlion-Headers, X-Curlion-Error, Content-Disposition'
 const okHost = (host) => new RegExp(`^(127\\.0\\.0\\.1|localhost|\\[::1\\]):${PORT}$`, 'i').test(host || '')
 
 function cors(res, origin) {
@@ -65,7 +65,7 @@ function cors(res, origin) {
 }
 
 function fail(res, status, message) {
-  res.writeHead(status, { 'Content-Type': 'text/plain; charset=utf-8', 'X-Beacon-Error': '1', 'Cache-Control': 'no-store' })
+  res.writeHead(status, { 'Content-Type': 'text/plain; charset=utf-8', 'X-Curlion-Error': '1', 'Cache-Control': 'no-store' })
   res.end(message)
 }
 
@@ -124,7 +124,7 @@ function decoder(encoding) {
 const server = http.createServer(async (req, res) => {
   const origin = (req.headers.origin || '').replace(/\/+$/, '')
   if (!okHost(req.headers.host)) return fail(res, 421, 'Unexpected Host header')
-  if (!origins.has(origin)) return fail(res, 403, `Origin ${origin || '(none)'} is not allowed. Start the agent with --origin ${origin || '<beacon-site>'}`)
+  if (!origins.has(origin)) return fail(res, 403, `Origin ${origin || '(none)'} is not allowed. Start the agent with --origin ${origin || '<curlion-site>'}`)
   cors(res, origin)
 
   const path = new URL(req.url, 'http://x').pathname
@@ -132,20 +132,20 @@ const server = http.createServer(async (req, res) => {
 
   if (req.method === 'GET' && path === '/health') {
     res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' })
-    return res.end(JSON.stringify({ name: 'beacon-agent', version: VERSION }))
+    return res.end(JSON.stringify({ name: 'curlion-agent', version: VERSION }))
   }
   if (req.method !== 'POST' || path !== '/proxy') return fail(res, 404, 'Not found')
 
   let target
   let list = []
   try {
-    target = new URL(req.headers['x-beacon-url'])
-    list = JSON.parse(decodeURIComponent(req.headers['x-beacon-headers'] || '%5B%5D'))
+    target = new URL(req.headers['x-curlion-url'])
+    list = JSON.parse(decodeURIComponent(req.headers['x-curlion-headers'] || '%5B%5D'))
   } catch {
-    return fail(res, 400, 'Invalid X-Beacon-Url or X-Beacon-Headers')
+    return fail(res, 400, 'Invalid X-Curlion-Url or X-Curlion-Headers')
   }
   if (!['http:', 'https:'].includes(target.protocol)) return fail(res, 400, 'Only http and https URLs are supported')
-  const method = String(req.headers['x-beacon-method'] || 'GET').toUpperCase()
+  const method = String(req.headers['x-curlion-method'] || 'GET').toUpperCase()
 
   // Headers exactly as the user set them (Cookie, Host, User-Agent… included).
   const headers = {}
@@ -178,9 +178,9 @@ const server = http.createServer(async (req, res) => {
   const respHeaders = []
   for (let i = 0; i < upstream.rawHeaders.length; i += 2) respHeaders.push({ key: upstream.rawHeaders[i].toLowerCase(), value: upstream.rawHeaders[i + 1] })
   const out = {
-    'X-Beacon-Status': String(upstream.statusCode),
-    'X-Beacon-Status-Text': (upstream.statusMessage || '').replace(/[^\t\x20-\x7e]/g, ''),
-    'X-Beacon-Headers': encodeURIComponent(JSON.stringify(respHeaders)),
+    'X-Curlion-Status': String(upstream.statusCode),
+    'X-Curlion-Status-Text': (upstream.statusMessage || '').replace(/[^\t\x20-\x7e]/g, ''),
+    'X-Curlion-Headers': encodeURIComponent(JSON.stringify(respHeaders)),
     'Cache-Control': 'no-store',
   }
   if (upstream.headers['content-type']) out['Content-Type'] = upstream.headers['content-type']
@@ -218,12 +218,12 @@ function log(method, url, result, started) {
 }
 
 server.on('error', (err) => {
-  console.error(err.code === 'EADDRINUSE' ? `Beacon Agent: port ${PORT} is already in use (another agent running?). Use --port.` : err)
+  console.error(err.code === 'EADDRINUSE' ? `Curlion Agent: port ${PORT} is already in use (another agent running?). Use --port.` : err)
   process.exit(1)
 })
 server.listen(PORT, '127.0.0.1', () => {
-  console.log(`Beacon Agent ${VERSION} listening on http://127.0.0.1:${PORT}`)
-  console.log(`Allowed Beacon site(s): ${[...origins].join(', ')}`)
+  console.log(`Curlion Agent ${VERSION} listening on http://127.0.0.1:${PORT}`)
+  console.log(`Allowed Curlion site(s): ${[...origins].join(', ')}`)
   console.log(`TLS certificates: ${STRICT_TLS ? 'verified' : 'self-signed accepted (use --strict-tls to verify)'}`)
   console.log('Keep this window open while you use Agent mode. Ctrl+C to stop.\n')
 })

@@ -21,7 +21,7 @@ export const state = reactive({
   envCurrent: {}, // this user's current values: envId -> varId -> value (browser only, never synced)
   activeEnvId: null,
   mode: 'direct', // direct | proxy | agent
-  agent: { port: AGENT_DEFAULT_PORT, status: 'unknown', version: null }, // Beacon Agent on this computer
+  agent: { port: AGENT_DEFAULT_PORT, status: 'unknown', version: null }, // Curlion Agent on this computer
   active: null, // { collectionId, requestId }
   tabs: [], // open tabs: { collectionId, requestId, preview, kind? } (kind 'collection' = overview, requestId 'col:<id>')
   drafts: {}, // requestId -> working copy edited in its tab; saved into the collection on Save
@@ -42,7 +42,7 @@ export const state = reactive({
 export const cloudEnabled = !!supabase
 
 // dev-only handle for debugging in the browser console
-if (import.meta.env?.DEV && typeof window !== "undefined") window.__beacon = { state }
+if (import.meta.env?.DEV && typeof window !== "undefined") window.__curlion = { state }
 
 // ---- Derived ------------------------------------------------------------
 
@@ -250,7 +250,7 @@ export function setMode(mode) {
   if (mode === 'agent') watchAgent()
 }
 
-// ---- Beacon Agent ---------------------------------------------------------
+// ---- Curlion Agent ---------------------------------------------------------
 // Polled while Agent mode is selected so the header can show whether it is running.
 
 let agentTimer = null

@@ -50,7 +50,7 @@ async function load() {
       if (!col) throw new Error('Collection not found in this browser.')
       doc.value = { ...buildDocsSnapshot(col), publishedAt: null }
     } else {
-      if (!supabase) throw new Error('This Beacon instance is not connected to a database.')
+      if (!supabase) throw new Error('This Curlion instance is not connected to a database.')
       const { data, error: e } = await supabase.from('published_docs').select('name, description, data, published_at').eq('slug', props.id).maybeSingle()
       if (e) throw e
       if (!data) throw new Error('These docs do not exist or are no longer published.')
@@ -126,7 +126,7 @@ const enabledRows = (rows) => (rows || []).filter((r) => r.enabled !== false && 
     <div v-else-if="error" class="flex h-screen flex-col items-center justify-center gap-3 p-6 text-center">
       <Lock :size="28" class="text-zinc-600" />
       <p class="text-zinc-300">{{ error }}</p>
-      <a href="/" class="text-sm text-orange-400 hover:underline">Open Beacon</a>
+      <a href="/" class="text-sm text-orange-400 hover:underline">Open Curlion</a>
     </div>
 
     <template v-else>
@@ -239,7 +239,7 @@ const enabledRows = (rows) => (rows || []).filter((r) => r.enabled !== false && 
           </section>
 
           <p v-if="!groups.length" class="text-zinc-500">This collection has no requests yet.</p>
-          <footer class="mt-16 border-t border-zinc-800 pt-6 text-xs text-zinc-600">Published with Beacon</footer>
+          <footer class="mt-16 border-t border-zinc-800 pt-6 text-xs text-zinc-600">Published with Curlion</footer>
         </main>
       </div>
     </template>

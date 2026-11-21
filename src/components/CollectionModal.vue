@@ -146,7 +146,7 @@ const tabs = [
           {{ cloudEnabled ? 'Sign in to publish docs.' : 'Publishing needs Supabase configured.' }} You can still preview the docs locally.
         </div>
         <template v-else-if="isOwner">
-          <label class="mb-1 block text-xs text-zinc-500">Docs address <span class="text-zinc-600">(readable by any signed-in Beacon user)</span></label>
+          <label class="mb-1 block text-xs text-zinc-500">Docs address <span class="text-zinc-600">(readable by any signed-in Curlion user)</span></label>
           <div class="flex items-center rounded border border-zinc-700 bg-zinc-900 focus-within:border-zinc-500" :class="{ 'border-red-700': !slugValid }">
             <span class="pl-3 text-zinc-500">{{ docsUrl('') }}</span>
             <input v-model="slug" class="min-w-0 flex-1 bg-transparent py-1.5 pr-3 font-mono outline-none" @input="slug = slug.toLowerCase()" />

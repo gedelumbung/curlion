@@ -1,7 +1,7 @@
 // Local-first storage (IndexedDB via Dexie). Everything works without login.
 import Dexie from 'dexie'
 
-export const db = new Dexie('beacon')
+export const db = new Dexie('curlion')
 
 const SCHEMA = {
   collections: 'id, updatedAt',
@@ -13,9 +13,9 @@ const SCHEMA = {
 db.version(1).stores(SCHEMA)
 
 // Database names used by earlier versions of the app, newest first
-// (PostLite -> Echo -> Beacon). The newest one that exists already holds the data
+// (PostLite -> Echo -> Beacon -> Curlion). The newest one that exists already holds the data
 // migrated from the ones before it, so only that one is copied.
-const LEGACY_NAMES = ['echo', 'postlite']
+const LEGACY_NAMES = ['beacon', 'echo', 'postlite']
 
 /**
  * Copy data from the pre-rename database, once. Rows already in this database win,
