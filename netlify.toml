@@ -12,8 +12,44 @@
   path = "/mock/*"
   function = "mock"
 
-# SPA fallback
+# The app lives at "/" (index.html). Docs pages (/docs/<slug>, /docs/preview/<id>) are
+# rendered by the same SPA. Every other unknown path gets a real 404 (public/404.html).
 [[redirects]]
-  from = "/*"
+  from = "/docs/*"
   to = "/index.html"
   status = 200
+
+# ---------------------------------------------------------------------------
+# Security headers
+# ---------------------------------------------------------------------------
+# CSP notes (Curlion is an API client, so some sources must stay open):
+# - connect-src: Direct mode fetches / opens WebSockets to any API the user types,
+#   including http://localhost; the Agent listens on http://127.0.0.1.
+#   (No upgrade-insecure-requests: it would rewrite http://localhost calls.)
+# - script-src 'unsafe-eval': protobufjs (gRPC) generates its encoders with new Function.
+#   Inline scripts stay blocked.
+# - style-src 'unsafe-inline': Vue style bindings and CodeMirror's injected styles.
+# - fonts: code fonts are loaded from Google Fonts when picked in Settings.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src * data: blob: http: https: ws: wss:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=(), bluetooth=(), magnetometer=(), gyroscope=(), accelerometer=()"
+    Cross-Origin-Opener-Policy = "same-origin"
+    Strict-Transport-Security = "max-age=31536000; includeSubDomains"
+
+# Vite output under /assets is content-hashed: cache it for a year.
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# The agent script is downloaded with curl and updated between releases: always revalidate.
+[[headers]]
+  for = "/curlion-agent.mjs"
+  [headers.values]
+    Cache-Control = "no-cache"
+    Content-Type = "text/javascript; charset=utf-8"

@@ -160,4 +160,5 @@ Then pick **Agent** in the header (the dot is green when the agent is running; c
 - **Direct mode:** browsers block some headers (`Cookie`, `User-Agent`, `Host`). Use Agent mode (or Proxy mode for public APIs) when you need them.
 - **Form-data files** are kept in memory only (not saved or synced). Pick the file again after a reload.
 - **The proxy** only accepts requests from the site's own origin and rejects private/localhost addresses, so it cannot be used as an open proxy.
+- **Security headers** (in [`netlify.toml`](netlify.toml)): CSP with `frame-ancestors 'none'`, `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy`, `Permissions-Policy`, COOP and HSTS. `connect-src` stays open (Direct mode calls any API, including `http://localhost`), `script-src` allows `'unsafe-eval'` for protobufjs (gRPC) while inline scripts stay blocked, and `style-src` allows inline styles (Vue, CodeMirror). Hashed `/assets/*` are cached for a year; unknown paths return a real 404 page.
 - **Schema:** the `environments` table has an extra `is_global` column (not in the PRD) so Globals are synced too.
