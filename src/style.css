@@ -155,7 +155,7 @@ select {
 .cm-var {
   border-radius: 3px;
   padding: 0 1px;
-  cursor: help;
+  cursor: pointer;
 }
 .cm-var-ok {
   color: var(--color-emerald-400);

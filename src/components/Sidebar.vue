@@ -5,6 +5,8 @@ import TreeNode from './TreeNode.vue'
 import {
   addNewRequest,
   addFolder,
+  collectionTabId,
+  openCollectionOverview,
   addRequest,
   clearHistory,
   createCollection,
@@ -141,11 +143,15 @@ const fmtTime = (ts) => new Date(ts).toLocaleString(undefined, { hour: '2-digit'
           <div v-if="colVisible(col)">
             <div
               class="group flex cursor-pointer items-center gap-1.5 rounded px-1 py-1 text-[13px] font-medium text-zinc-300 hover:bg-zinc-800/60"
-              @click="toggleExpanded(col.id)"
+              :class="{ 'bg-zinc-800 text-zinc-100': state.active?.requestId === collectionTabId(col.id) }"
+              title="Open collection overview"
+              @click="openCollectionOverview(col.id)"
               @dblclick="beginColRename(col)"
               @contextmenu.prevent="openMenu($event, col)"
             >
-              <ChevronRight :size="13" class="shrink-0 transition-transform" :class="{ 'rotate-90': q || state.expanded[col.id] }" />
+              <button class="-m-0.5 shrink-0 rounded p-0.5 hover:bg-zinc-700" :title="state.expanded[col.id] ? 'Collapse' : 'Expand'" @click.stop="toggleExpanded(col.id)" @dblclick.stop>
+                <ChevronRight :size="13" class="transition-transform" :class="{ 'rotate-90': q || state.expanded[col.id] }" />
+              </button>
               <input
                 v-if="renamingId === col.id"
                 :id="'col-rename-' + col.id"

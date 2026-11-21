@@ -5,8 +5,8 @@ import { EditorState } from '@codemirror/state'
 import { EditorView, keymap, placeholder as cmPlaceholder } from '@codemirror/view'
 import { completionKeymap, completionStatus } from '@codemirror/autocomplete'
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
-import { baseTheme, refreshVars, singleLineTheme, variableCompletion, variableHighlighter } from '../lib/cm.js'
-import { scope } from '../store.js'
+import { baseTheme, refreshVars, singleLineTheme, variableClick, variableCompletion, variableHighlighter } from '../lib/cm.js'
+import { openVarPopover, scope } from '../store.js'
 
 const props = defineProps({
   modelValue: { type: String, default: '' },
@@ -41,6 +41,7 @@ onMounted(() => {
         cmPlaceholder(props.placeholder),
         variableHighlighter(() => scope.value),
         variableCompletion(() => scope.value),
+        variableClick(openVarPopover),
         baseTheme,
         singleLineTheme,
         EditorView.contentAttributes.of({ class: props.masked ? 'cm-masked' : '' }),

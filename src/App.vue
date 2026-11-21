@@ -6,6 +6,7 @@ import { vTopLayer } from './lib/topLayer.js'
 import Sidebar from './components/Sidebar.vue'
 import RequestEditor from './components/RequestEditor.vue'
 import TabBar from './components/TabBar.vue'
+import CollectionOverview from './components/CollectionOverview.vue'
 import BeaconLogo from './components/BeaconLogo.vue'
 import ResponseViewer from './components/ResponseViewer.vue'
 import EnvironmentModal from './components/EnvironmentModal.vue'
@@ -16,7 +17,8 @@ import CollectionModal from './components/CollectionModal.vue'
 import ActivityDashboard from './components/ActivityDashboard.vue'
 import AgentModal from './components/AgentModal.vue'
 import UnsavedDialog from './components/UnsavedDialog.vue'
-import { activeRequest, addNewRequest, checkAgent, cloudEnabled, init, openTabs, saveNow, send, setActiveEnv, setMode, signOut, state } from './store.js'
+import VarPopover from './components/VarPopover.vue'
+import { activeOverview, activeRequest, addNewRequest, checkAgent, cloudEnabled, init, openTabs, saveNow, send, setActiveEnv, setMode, signOut, state } from './store.js'
 
 const modal = ref(null) // env | import | code | collection | activity | agent
 const collectionCtx = ref(null) // { col, tab }
@@ -233,6 +235,7 @@ const syncLabel = {
           ></div>
           <ResponseViewer :key="activeRequest.id" class="min-h-0 flex-1" />
         </div>
+        <CollectionOverview v-else-if="activeOverview" :key="activeOverview.id" :collection="activeOverview" @collection="openCollection" />
         <div v-else class="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center text-zinc-500">
           <BeaconLogo class="h-12 w-12 text-zinc-100 opacity-60" />
           <p>Select a request from the sidebar, or</p>
@@ -253,6 +256,7 @@ const syncLabel = {
     <ActivityDashboard v-if="modal === 'activity'" @close="modal = null" />
     <AgentModal v-if="modal === 'agent'" @close="modal = null" />
     <!-- keyed so each prompt in a multi-tab close gets a fresh dialog -->
+    <VarPopover v-if="state.varPopover" />
     <UnsavedDialog v-if="state.unsavedPrompt" :key="state.unsavedPrompt.index + ':' + state.unsavedPrompt.name" />
     <CollectionModal v-if="modal === 'collection'" :collection="collectionCtx.col" :initial-tab="collectionCtx.tab" @close="modal = null" />
 

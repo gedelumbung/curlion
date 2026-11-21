@@ -32,7 +32,7 @@ export const DYNAMIC_DESCRIPTIONS = {
  * Environments are shared with the team; `v.value` is the shared *initial value*.
  * `current` holds this user's *current values* ({ [envId]: { [varId]: value } }), kept in
  * this browser only. A non-empty current value wins over the initial value.
- * Returns Map<key, { value, isSecret, source, isCurrent }>
+ * Returns Map<key, { value, isSecret, source, isCurrent, envId, varId }>
  */
 export function buildScope(globalEnv, activeEnv, current = {}) {
   const scope = new Map()
@@ -42,7 +42,7 @@ export function buildScope(globalEnv, activeEnv, current = {}) {
       if (v.enabled !== false && v.key) {
         const cur = current[env.id]?.[v.id]
         const isCurrent = cur !== undefined && cur !== ''
-        scope.set(v.key, { value: isCurrent ? cur : (v.value ?? ''), isSecret: !!v.isSecret, source: env.name, isCurrent })
+        scope.set(v.key, { value: isCurrent ? cur : (v.value ?? ''), isSecret: !!v.isSecret, source: env.name, isCurrent, envId: env.id, varId: v.id })
       }
     }
   }

@@ -1,4 +1,4 @@
-// CodeMirror extensions: {{variable}} highlighting with hover values + autocomplete.
+// CodeMirror extensions: {{variable}} highlighting, click-to-edit popover hook, autocomplete.
 import { Decoration, EditorView, MatchDecorator, ViewPlugin } from '@codemirror/view'
 import { StateEffect } from '@codemirror/state'
 import { autocompletion } from '@codemirror/autocomplete'
@@ -13,14 +13,15 @@ export const refreshVars = StateEffect.define()
  * @param getScope () => Map<key, {value,isSecret,source}>
  */
 export function variableHighlighter(getScope) {
+  // data-var lets variableClick() know which variable was clicked
   const decoFor = (name) => {
     if (name in DYNAMIC_VARS) {
-      return Decoration.mark({ class: 'cm-var cm-var-dynamic', attributes: { title: `${name} — ${DYNAMIC_DESCRIPTIONS[name]} (generated on send)` } })
+      return Decoration.mark({ class: 'cm-var cm-var-dynamic', attributes: { 'data-var': name, title: `${name}: ${DYNAMIC_DESCRIPTIONS[name]} (generated on send)` } })
     }
     const v = getScope().get(name)
-    if (!v) return Decoration.mark({ class: 'cm-var cm-var-missing', attributes: { title: `${name} is not defined in the active environment or Globals` } })
+    if (!v) return Decoration.mark({ class: 'cm-var cm-var-missing', attributes: { 'data-var': name, title: `${name} is not defined. Click to add it.` } })
     const shown = v.isSecret ? '••••••' : v.value === '' ? '(empty)' : v.value
-    return Decoration.mark({ class: 'cm-var cm-var-ok', attributes: { title: `${name} = ${shown}   [${v.source}${v.isCurrent ? ', your current value' : ''}]` } })
+    return Decoration.mark({ class: 'cm-var cm-var-ok', attributes: { 'data-var': name, title: `${name} = ${shown}   [${v.source}${v.isCurrent ? ', your current value' : ''}]  Click to edit.` } })
   }
 
   const matcher = new MatchDecorator({
@@ -40,6 +41,20 @@ export function variableHighlighter(getScope) {
     },
     { decorations: (v) => v.decorations },
   )
+}
+
+/**
+ * Clicking a highlighted {{variable}} calls onClick(name, anchorRect) (used for the inline
+ * edit popover). The click still places the cursor as usual.
+ */
+export function variableClick(onClick) {
+  return EditorView.domEventHandlers({
+    click(e) {
+      const el = e.target instanceof Element ? e.target.closest('.cm-var[data-var]') : null
+      if (el && !e.shiftKey && !e.metaKey && !e.ctrlKey) onClick(el.dataset.var, el.getBoundingClientRect())
+      return false
+    },
+  })
 }
 
 export function variableCompletion(getScope) {

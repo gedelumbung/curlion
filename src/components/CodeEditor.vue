@@ -9,8 +9,8 @@ import { json } from '@codemirror/lang-json'
 import { xml } from '@codemirror/lang-xml'
 import { html } from '@codemirror/lang-html'
 import { syntaxHighlighting } from '@codemirror/language'
-import { baseTheme, draculaHighlightStyle, refreshVars, softLightHighlightStyle, variableCompletion, variableHighlighter } from '../lib/cm.js'
-import { scope } from '../store.js'
+import { baseTheme, draculaHighlightStyle, refreshVars, softLightHighlightStyle, variableClick, variableCompletion, variableHighlighter } from '../lib/cm.js'
+import { openVarPopover, scope } from '../store.js'
 import { theme } from '../lib/theme.js'
 
 const props = defineProps({
@@ -44,7 +44,7 @@ onMounted(() => {
         langConf.of(langExt(props.language)),
         wrapConf.of(props.wrap ? EditorView.lineWrapping : []),
         EditorState.readOnly.of(props.readonly),
-        props.variables ? [variableHighlighter(() => scope.value), variableCompletion(() => scope.value)] : [],
+        props.variables ? [variableHighlighter(() => scope.value), variableCompletion(() => scope.value), variableClick(openVarPopover)] : [],
         EditorView.updateListener.of((u) => {
           if (u.docChanged && !props.readonly) emit('update:modelValue', u.state.doc.toString())
         }),

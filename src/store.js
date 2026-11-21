@@ -23,9 +23,10 @@ export const state = reactive({
   mode: 'direct', // direct | proxy | agent
   agent: { port: AGENT_DEFAULT_PORT, status: 'unknown', version: null }, // Beacon Agent on this computer
   active: null, // { collectionId, requestId }
-  tabs: [], // open request tabs: { collectionId, requestId, preview }
+  tabs: [], // open tabs: { collectionId, requestId, preview, kind? } (kind 'collection' = overview, requestId 'col:<id>')
   drafts: {}, // requestId -> working copy edited in its tab; saved into the collection on Save
   unsavedPrompt: null, // { name, index, total, showIgnoreAll, resolve } for the close-tab dialog
+  varPopover: null, // { name, rect } inline {{variable}} editor opened by clicking a variable
   expanded: {}, // folder/collection id -> bool
   search: '',
   responses: {}, // requestId -> response (kept per request for this session)
@@ -62,10 +63,19 @@ export const activeResponse = computed(() => (activeRequest.value ? state.respon
 export const activeLoading = computed(() => !!(activeRequest.value && state.pending[activeRequest.value.id]))
 export const activeError = computed(() => (activeRequest.value ? state.errors[activeRequest.value.id] || null : null))
 
+/** Collection overview tabs reuse the tab list with a synthetic id. */
+export const collectionTabId = (collectionId) => `col:${collectionId}`
+export const isCollectionTab = (t) => t?.kind === 'collection'
+/** The collection whose overview tab is active, if any. */
+export const activeOverview = computed(() =>
+  state.active?.requestId === collectionTabId(state.active?.collectionId) ? activeCollection.value : null,
+)
+
 /** Open tabs resolved to their collection + request (tabs whose request no longer exists are skipped). */
 export const openTabs = computed(() =>
   state.tabs.flatMap((tab) => {
     const col = state.collections.find((c) => c.id === tab.collectionId)
+    if (isCollectionTab(tab)) return col ? [{ tab, col, req: null, dirty: false }] : []
     const hit = col && findNode(col.items, tab.requestId)
     if (hit?.node.type !== 'request') return []
     const draft = state.drafts[hit.node.id]
@@ -198,7 +208,11 @@ export async function init() {
     await db.environments.put(plain(g))
   }
 
-  const exists = (t) => t && findNode(state.collections.find((c) => c.id === t.collectionId)?.items || [], t.requestId)
+  const exists = (t) => {
+    const col = t && state.collections.find((c) => c.id === t.collectionId)
+    if (!col) return false
+    return t.requestId === collectionTabId(col.id) || !!findNode(col.items, t.requestId)
+  }
   if (!state.tabs.length) state.tabs = (savedTabs || []).filter(exists)
   if (!state.active && exists(active)) state.active = active
   if (state.active && !state.tabs.some((t) => t.requestId === state.active.requestId)) {
@@ -396,13 +410,13 @@ function saveTabs() {
  * Open a request in a tab and make it active.
  * opts.preview: open as a preview tab (replaces the current preview tab).
  */
-export function openRequest(collectionId, requestId, { preview = false } = {}) {
+export function openRequest(collectionId, requestId, { preview = false, kind } = {}) {
   const existing = state.tabs.find((t) => t.requestId === requestId)
   if (existing) {
     existing.collectionId = collectionId
     if (!preview) existing.preview = false
   } else {
-    const tab = { collectionId, requestId, preview }
+    const tab = kind ? { collectionId, requestId, preview, kind } : { collectionId, requestId, preview }
     const prevIdx = preview ? state.tabs.findIndex((t) => t.preview) : -1
     if (prevIdx !== -1) state.tabs.splice(prevIdx, 1, tab)
     else {
@@ -413,6 +427,12 @@ export function openRequest(collectionId, requestId, { preview = false } = {}) {
   ensureDraft(requestId, collectionId)
   state.active = { collectionId, requestId }
   saveTabs()
+}
+
+/** Open a collection's overview tab (sidebar click on a collection), and expand it. */
+export function openCollectionOverview(collectionId, { preview = true } = {}) {
+  expand(collectionId)
+  openRequest(collectionId, collectionTabId(collectionId), { preview, kind: 'collection' })
 }
 
 /** Turn a preview tab into a regular one (on edit, send or double-click). */
@@ -556,7 +576,7 @@ export function deleteNode(col, id) {
   const list = hit.parent ? hit.parent.items : col.items
   list.splice(list.indexOf(hit.node), 1)
   // close the tab of the deleted request, or of every request inside a deleted folder
-  closeTabs((t) => t.collectionId === col.id && !findNode(col.items, t.requestId))
+  closeTabs((t) => t.collectionId === col.id && !isCollectionTab(t) && !findNode(col.items, t.requestId))
   touchCollection(col)
 }
 
@@ -587,6 +607,22 @@ export function createEnvironment(name) {
 
 function saveEnvCurrent() {
   debounce('save:envCurrent', SAVE_DELAY, () => setMeta('envCurrent', clone(toRaw(state.envCurrent))))
+}
+
+/** Open the inline variable editor below a clicked {{variable}} (see VarPopover.vue). */
+export function openVarPopover(name, rect) {
+  state.varPopover = { name, rect: { left: rect.left, top: rect.top, bottom: rect.bottom, width: rect.width } }
+}
+export const closeVarPopover = () => (state.varPopover = null)
+
+/** Add a new variable to an environment (from the inline editor). Returns the variable. */
+export function addVariable(envId, key, value = '', isSecret = /token|secret|password|key/i.test(key)) {
+  const env = state.environments.find((e) => e.id === envId)
+  if (!env) return null
+  const v = { id: uid(), key, value, enabled: true, isSecret }
+  env.variables.push(v)
+  touchEnvironment(env)
+  return v
 }
 
 /** Set this user's current value of a variable (empty string clears it). */

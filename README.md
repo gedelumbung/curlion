@@ -58,6 +58,7 @@ netlify dev        # runs Vite + edge functions at /api/proxy and /mock/*
 | Import Postman Collection v2.1 (folders, auth, body, saved responses → samples, variables → environment) | ✅ |
 | Export a collection to Postman v2.1 JSON | ✅ |
 | Environments + Globals, switcher, `{{var}}` green/red highlighting + value on hover, `{{` autocomplete | ✅ |
+| **Inline variable editing** (like Postman): click a `{{var}}` in any field to edit its current / initial value, add an undefined one to the active environment or Globals, or see what a dynamic variable generates | ✅ |
 | **Shared environments** (like Postman): initial values are shared with the team; each user's current values (e.g. extracted tokens) stay in their browser and are never synced. Globals stay private | ✅ |
 | Dynamic vars: `$uuid`, `$guid`, `$timestamp`, `$isoTimestamp`, `$randomInt`, `$randomEmail` | ✅ |
 | Post-Response Extract (JSON path → your current value of an environment variable), token chaining | ✅ |
@@ -84,6 +85,7 @@ Per collection from the sidebar menu (right-click or `⋯`): **Publish docs** an
 ## Interface
 
 - **Explicit save** (like Postman): edits to a request stay in its tab as unsaved changes (a red dot on the tab, kept across reloads in this browser) until you press **Save** or `Ctrl/⌘+S`; only saved changes sync to the team and appear in the activity log. Adding, renaming, moving and deleting items, and *Save as Sample*, are saved right away. Closing a tab with unsaved changes asks Save / Don't save / Cancel; when closing several, an **Ignore all** button appears after three prompts.
+- **Collection overview**: clicking a collection's name in the sidebar opens its overview tab (rename, counts, description, requests by folder, recent activity, quick actions); the chevron only expands/collapses.
 - **Multiple tabs** (like Postman): a single click in the sidebar opens a *preview* tab (italic) that the next click replaces; editing, sending or double-clicking keeps it open. Close with × or middle-click, drag to reorder, right-click for Close others / to the right / all. Each tab keeps its own response and can send concurrently. Open tabs are remembered.
 - **Light / dark theme**: toggle switch in the header. The choice is remembered; until you pick one, it follows the system setting.
 - **Resizable panes**: drag the sidebar edge or the divider between request and response. Double-click a divider to reset it. Sizes are remembered per browser.
