@@ -12,6 +12,12 @@
   path = "/mock/*"
   function = "mock"
 
+# The landing page (public/landing) uses relative asset paths, so it needs the trailing slash.
+[[redirects]]
+  from = "/landing"
+  to = "/landing/"
+  status = 301
+
 # The app lives at "/" (index.html). Docs pages (/docs/<slug>, /docs/preview/<id>) are
 # rendered by the same SPA. Every other unknown path gets a real 404 (public/404.html).
 [[redirects]]

@@ -9,8 +9,8 @@
     <meta property="og:type" content="website" />
     <meta property="og:title" content="Curlion — a fast, local-first API client for your browser" />
     <meta property="og:description" content="Import your cURLs, test endpoints, and clock out on time. HTTP, GraphQL, WebSocket, Socket.IO and gRPC in one tab-friendly workspace." />
-    <!-- Add <meta property="og:image" content="https://YOUR-DOMAIN/landing/img/hero.webp" /> once the domain is known (it must be an absolute URL). -->
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <!-- Add <meta property="og:image" content="https://YOUR-DOMAINimg/hero.webp" /> once the domain is known (it must be an absolute URL). -->
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -155,10 +155,16 @@
       .final h2 { max-width: 18ch; margin-inline: auto; }
       .final p { margin: 16px auto 0; max-width: 520px; color: var(--muted); }
       .final .cta { margin-top: 32px; }
-      footer { border-top: 1px solid var(--line); padding: 36px 0 44px; font-size: 14.5px; color: var(--muted); }
-      footer .wrap { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px 32px; }
-      footer img { height: 28px; width: auto; }
+      footer { border-top: 1px solid var(--line); padding: 44px 0 40px; font-size: 14.5px; color: var(--muted); }
+      .foot-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 20px 32px; }
+      .foot-top img { height: 28px; width: auto; }
+      .foot-top ul { display: flex; flex-wrap: wrap; gap: 8px 28px; list-style: none; margin: 0; padding: 0; }
+      .foot-bottom { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 32px; margin-top: 28px; padding-top: 24px; border-top: 1px solid var(--line); }
       footer kbd { font-family: var(--mono); font-size: 12px; border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; color: var(--text); }
+      footer a { color: var(--text); text-decoration: none; transition: color 0.15s; }
+      footer a:hover { color: var(--accent); }
+      .foot-bottom a { text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; }
+      .foot-bottom a:hover { text-decoration-color: var(--accent); }
 
       /* ---------- responsive ---------- */
       @media (max-width: 1000px) {
@@ -179,6 +185,7 @@
         .grid, .themes { grid-template-columns: 1fr; }
         .btn { padding: 13px 20px; }
         .final { padding: 72px 0; margin-top: 88px; }
+        .foot-top, .foot-bottom { flex-direction: column; align-items: flex-start; }
       }
     </style>
   </head>
@@ -187,16 +194,17 @@
 
     <header class="nav">
       <div class="wrap">
-        <a href="/landing/" aria-label="Curlion home"><img src="/brand/curlion-logo-dark.svg" alt="Curlion" width="96" height="34" /></a>
+        <a href="#" aria-label="Curlion home"><img src="brand/curlion-logo-dark.svg" alt="Curlion" width="96" height="34" /></a>
         <nav aria-label="Primary">
           <ul>
             <li><a href="#features">Features</a></li>
             <li><a href="#tour">Product tour</a></li>
             <li><a href="#themes">Themes</a></li>
             <li><a href="#start">Get started</a></li>
+            <li><a href="https://github.com/gedelumbung/curlion" target="_blank" rel="noopener noreferrer">GitHub</a></li>
           </ul>
         </nav>
-        <a class="btn btn-primary btn-sm" href="/">Open Curlion</a>
+        <a class="btn btn-primary btn-sm" href="https://curlion-app.netlify.app/">Open Curlion</a>
       </div>
     </header>
 
@@ -210,14 +218,14 @@
             Curlion is a fast, browser-based API client. Import your cURLs and Postman collections, test endpoints, and clock out on time — without your laptop fans preparing for takeoff.
           </p>
           <div class="cta">
-            <a class="btn btn-primary" href="/">Open Curlion</a>
+            <a class="btn btn-primary" href="https://curlion-app.netlify.app/">Open Curlion</a>
             <a class="btn btn-ghost" href="#tour">Take the tour</a>
           </div>
           <p class="hint">Paste a cURL into the URL bar · <kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>Enter</kbd> to send</p>
 
           <div class="window">
             <div class="bar" aria-hidden="true"><i></i><i></i><i></i><span>Curlion — Acme Store API</span></div>
-            <img src="/landing/img/hero.webp" width="2200" height="1375" fetchpriority="high"
+            <img src="img/hero.webp" width="2200" height="1375" fetchpriority="high"
                  alt="Curlion showing a GET request to a products endpoint with query params, and a pretty-printed JSON response below with status, time and size" />
           </div>
         </div>
@@ -310,7 +318,7 @@
               </ul>
             </div>
             <figure class="shot fade-r">
-              <img src="/landing/img/variables.webp" width="1500" height="640" loading="lazy"
+              <img src="img/variables.webp" width="1500" height="640" loading="lazy"
                    alt="A variable popover over the URL bar showing the baseUrl variable with its current and initial value" />
             </figure>
           </div>
@@ -328,7 +336,7 @@
               </ul>
             </div>
             <figure class="shot fade-r">
-              <img src="/landing/img/protocols.webp" width="1250" height="560" loading="lazy"
+              <img src="img/protocols.webp" width="1250" height="560" loading="lazy"
                    alt="The request type menu open in the URL bar, listing HTTP, GraphQL, WebSocket, Socket.IO and gRPC" />
             </figure>
           </div>
@@ -344,7 +352,7 @@
               </ul>
             </div>
             <figure class="shot">
-              <img src="/landing/img/snippet.webp" width="1500" height="995" loading="lazy"
+              <img src="img/snippet.webp" width="1500" height="995" loading="lazy"
                    alt="The code snippet dialog showing a Python requests example for a POST request, with a list of other languages on the left" />
             </figure>
           </div>
@@ -360,7 +368,7 @@
               </ul>
             </div>
             <figure class="shot">
-              <img src="/landing/img/import.webp" width="1200" height="836" loading="lazy"
+              <img src="img/import.webp" width="1200" height="836" loading="lazy"
                    alt="The Import dialog with a drop zone for a Postman Collection file and a text area to paste JSON" />
             </figure>
           </div>
@@ -377,7 +385,7 @@
               </ul>
             </div>
             <figure class="shot">
-              <img src="/landing/img/overview.webp" width="1780" height="1450" loading="lazy"
+              <img src="img/overview.webp" width="1780" height="1450" loading="lazy"
                    alt="A collection overview listing three folders with their requests, plus buttons for new request, new folder, publish docs, activity log and export" />
             </figure>
           </div>
@@ -388,7 +396,7 @@
             <p style="margin-top: 16px">Publish any collection as a clean, read-only page. Literal tokens, passwords and API keys are replaced with placeholders before anything is shared.</p>
           </div>
           <figure class="shot shot-wide">
-            <img src="/landing/img/docs.webp" width="2000" height="903" loading="lazy"
+            <img src="img/docs.webp" width="2000" height="903" loading="lazy"
                  alt="A published API documentation page with folder navigation on the left and endpoint details with a cURL sample on the right" />
           </figure>
         </div>
@@ -404,19 +412,19 @@
           </div>
           <div class="themes">
             <figure class="theme">
-              <div class="shot"><img src="/landing/img/theme-dracula.webp" width="1200" height="625" loading="lazy" alt="Curlion in the Dracula dark theme" /></div>
+              <div class="shot"><img src="img/theme-dracula.webp" width="1200" height="625" loading="lazy" alt="Curlion in the Dracula dark theme" /></div>
               <figcaption><b>Dracula</b><span>dark</span></figcaption>
             </figure>
             <figure class="theme">
-              <div class="shot"><img src="/landing/img/theme-tokyonight.webp" width="1200" height="625" loading="lazy" alt="Curlion in the Tokyo Night dark theme" /></div>
+              <div class="shot"><img src="img/theme-tokyonight.webp" width="1200" height="625" loading="lazy" alt="Curlion in the Tokyo Night dark theme" /></div>
               <figcaption><b>Tokyo Night</b><span>dark</span></figcaption>
             </figure>
             <figure class="theme">
-              <div class="shot"><img src="/landing/img/theme-monokai.webp" width="1200" height="625" loading="lazy" alt="Curlion in the Monokai dark theme" /></div>
+              <div class="shot"><img src="img/theme-monokai.webp" width="1200" height="625" loading="lazy" alt="Curlion in the Monokai dark theme" /></div>
               <figcaption><b>Monokai</b><span>dark</span></figcaption>
             </figure>
             <figure class="theme">
-              <div class="shot"><img src="/landing/img/theme-alucard.webp" width="1200" height="625" loading="lazy" alt="Curlion in the Alucard light theme" /></div>
+              <div class="shot"><img src="img/theme-alucard.webp" width="1200" height="625" loading="lazy" alt="Curlion in the Alucard light theme" /></div>
               <figcaption><b>Alucard</b><span>light</span></figcaption>
             </figure>
           </div>
@@ -461,8 +469,8 @@ VITE_SUPABASE_ANON_KEY</pre>
           <h2>Ready to put the jet engine away?</h2>
           <p>Open Curlion, paste a cURL and hit send. That’s the whole onboarding.</p>
           <div class="cta">
-            <a class="btn btn-primary" href="/">Open Curlion</a>
-            <a class="btn btn-ghost" href="#features">Back to features</a>
+            <a class="btn btn-primary" href="https://curlion-app.netlify.app/">Open Curlion</a>
+            <a class="btn btn-ghost" href="https://github.com/gedelumbung/curlion" target="_blank" rel="noopener noreferrer">View on GitHub</a>
           </div>
         </div>
       </div>
@@ -470,9 +478,22 @@ VITE_SUPABASE_ANON_KEY</pre>
 
     <footer>
       <div class="wrap">
-        <img src="/brand/curlion-logo-dark.svg" alt="Curlion" width="79" height="28" />
-        <span>Built with Vue 3, Vite, Tailwind CSS, CodeMirror, Dexie and Supabase.</span>
-        <span>Made with <kbd>Ctrl+C</kbd>, <kbd>Ctrl+V</kbd>, and aggressive prompting.</span>
+        <div class="foot-top">
+          <img src="brand/curlion-logo-dark.svg" alt="Curlion" width="79" height="28" />
+          <nav aria-label="Footer">
+            <ul>
+              <li><a href="#features">Features</a></li>
+              <li><a href="#tour">Product tour</a></li>
+              <li><a href="#themes">Themes</a></li>
+              <li><a href="#start">Get started</a></li>
+              <li><a href="https://github.com/gedelumbung/curlion" target="_blank" rel="noopener noreferrer">GitHub</a></li>
+            </ul>
+          </nav>
+        </div>
+        <div class="foot-bottom">
+          <span>Built with Vue 3, Vite, Tailwind CSS, CodeMirror, Dexie and Supabase.</span>
+          <span>Made with <kbd>Ctrl+C</kbd>, <kbd>Ctrl+V</kbd>, and aggressive prompting by <a href="https://gedelumbung.com" target="_blank" rel="noopener noreferrer">Gede Lumbung</a>.</span>
+        </div>
       </div>
     </footer>
   </body>
