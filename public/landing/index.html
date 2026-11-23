@@ -3,17 +3,146 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Curlion — a fast, local-first API client for your browser</title>
-    <meta name="description" content="Curlion is a lightweight, browser-based API client. Send HTTP, GraphQL, WebSocket, Socket.IO and gRPC requests, share environments with your team, import Postman collections and publish docs. Free to run." />
+    <title>Curlion — Free API Client & Lightweight Postman Alternative</title>
+    <meta name="description" content="Free, local-first API client for your browser: REST, GraphQL, WebSocket, Socket.IO, gRPC. A lightweight Postman, Insomnia, Bruno and Hoppscotch alternative." />
+    <meta name="author" content="Gede Lumbung" />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
     <meta name="theme-color" content="#0b0e14" />
+    <link rel="canonical" href="https://curlion-app.netlify.app/landing/" />
     <meta property="og:type" content="website" />
-    <meta property="og:title" content="Curlion — a fast, local-first API client for your browser" />
-    <meta property="og:description" content="Import your cURLs, test endpoints, and clock out on time. HTTP, GraphQL, WebSocket, Socket.IO and gRPC in one tab-friendly workspace." />
-    <!-- Add <meta property="og:image" content="https://YOUR-DOMAINimg/hero.webp" /> once the domain is known (it must be an absolute URL). -->
+    <meta property="og:site_name" content="Curlion" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:url" content="https://curlion-app.netlify.app/landing/" />
+    <meta property="og:title" content="Curlion — Free API Client &amp; Lightweight Postman Alternative" />
+    <meta property="og:description" content="A free, local-first API client that runs in your browser. Import your Postman collections and cURLs, share environments with your team, and publish docs." />
+    <meta property="og:image" content="https://curlion-app.netlify.app/landing/img/og.jpg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Curlion, a free local-first API client, showing a request and its JSON response" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Curlion — Free API Client &amp; Lightweight Postman Alternative" />
+    <meta name="twitter:description" content="A free, local-first API client that runs in your browser. Import your Postman collections and cURLs, share environments with your team, and publish docs." />
+    <meta name="twitter:image" content="https://curlion-app.netlify.app/landing/img/og.jpg" />
     <link rel="icon" type="image/svg+xml" href="favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "SoftwareApplication",
+      "@id": "https://curlion-app.netlify.app/#app",
+      "name": "Curlion",
+      "url": "https://curlion-app.netlify.app/landing/",
+      "applicationCategory": "DeveloperApplication",
+      "operatingSystem": "Any (web browser)",
+      "description": "Free, local-first API client for your browser. Send REST, GraphQL, WebSocket, Socket.IO and gRPC requests, share environments with your team, import Postman collections and publish API docs.",
+      "alternateName": "Curlion API client",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      },
+      "image": "https://curlion-app.netlify.app/landing/img/og.jpg",
+      "screenshot": [
+        "https://curlion-app.netlify.app/landing/img/hero.webp",
+        "https://curlion-app.netlify.app/landing/img/snippet.webp",
+        "https://curlion-app.netlify.app/landing/img/docs.webp"
+      ],
+      "featureList": [
+        "REST, GraphQL, WebSocket, Socket.IO and gRPC requests",
+        "Local-first storage in the browser (IndexedDB)",
+        "Postman Collection v2.1 import and export, and cURL import",
+        "Environments, globals and variables with inline editing",
+        "Team workspaces with shared environments",
+        "Code snippets for cURL, JavaScript, PHP, Go and Python",
+        "Published read-only API documentation",
+        "Eight themes, dark and light"
+      ],
+      "author": {
+        "@type": "Person",
+        "name": "Gede Lumbung",
+        "url": "https://gedelumbung.com"
+      },
+      "sameAs": [
+        "https://github.com/gedelumbung/curlion"
+      ]
+    },
+    {
+      "@type": "FAQPage",
+      "@id": "https://curlion-app.netlify.app/landing/#faq",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "Is Curlion a good Postman alternative?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Curlion covers the everyday Postman workflow: collections and folders, environments and variables, auth, request bodies, a response viewer, history, tabs, cURL and Postman import/export, code snippets and published docs. It runs in the browser and stores data locally by default. It does not run Postman's pre-request and test scripts (they are skipped on import); Post-Response extraction handles token chaining. If your workflow depends on scripting, check that first."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Can I import my Postman collections into Curlion?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. Curlion imports Postman Collection v2.1 JSON, including folders, auth, bodies, saved responses and variables (variables become an environment). You can also paste a raw cURL command into the URL bar, and export any collection back to Postman v2.1 JSON."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How is Curlion different from Insomnia, Bruno and Yaak?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Insomnia, Bruno and Yaak are desktop applications. Curlion is a web app: open a tab and start sending requests, with nothing to install. When you need to reach localhost or your local network, the optional Curlion Agent sends requests from your own computer."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Is Curlion an alternative to Thunder Client?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "If you like a lightweight GUI client but don't want it tied to your editor, yes. Thunder Client runs inside code editors (VS Code and JetBrains IDEs); Curlion is a standalone web app that works in any browser, whatever editor you use."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How does Curlion compare to Hoppscotch?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Both can be used in the browser, so the workflow will feel familiar. Curlion keeps your data in the browser's IndexedDB by default, can sync saved changes to a Supabase project you control for team workspaces, imports and exports Postman v2.1, and publishes read-only docs from a collection."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Which protocols does Curlion support?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "HTTP/REST, GraphQL (with a schema explorer), WebSocket, Socket.IO and gRPC. gRPC needs the Curlion Agent, which also lets any request reach localhost or a self-signed server."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Is Curlion free?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Curlion is designed to run on the free tiers of Netlify and Supabase, so hosting it for yourself or your team can cost $0. Running it locally only needs Node.js."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Where is my data stored?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "In local mode, collections, environments, tabs and history stay in your browser's IndexedDB. If you connect a Supabase project, saved changes sync to it, while each person's current environment values (such as tokens) stay in their own browser."
+          }
+        }
+      ]
+    }
+  ]
+}
+    </script>
     <style>
       :root {
         --bg: #0b0e14;
@@ -148,6 +277,23 @@
       pre { margin: 16px 0 0; padding: 14px 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--strong); font: 400 13.5px/1.6 var(--mono); overflow-x: auto; }
       pre .p { color: var(--muted); user-select: none; }
 
+      /* ---------- alternatives + faq ---------- */
+      .alts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+      .alts .card h3 { margin-top: 0; }
+      .alts .card p { margin-top: 10px; }
+      .head-wide { max-width: 860px; }
+      .fine { max-width: 760px; margin: 28px auto 0; text-align: center; font-size: 13.5px; line-height: 1.6; color: var(--muted); }
+      .alt-line { margin: 18px auto 0; max-width: 620px; font-size: 15px; color: var(--muted); }
+      .alt-line a { color: var(--accent); text-decoration: underline; text-decoration-color: rgba(230, 180, 80, 0.4); text-underline-offset: 3px; }
+      .faq { max-width: 820px; margin-inline: auto; display: grid; gap: 10px; }
+      .faq details { border: 1px solid var(--line); border-radius: 12px; background: var(--panel); transition: border-color 0.2s; }
+      .faq details[open] { border-color: #3a4152; }
+      .faq summary { display: flex; align-items: center; justify-content: space-between; gap: 16px; cursor: pointer; list-style: none; padding: 18px 22px; color: var(--strong); font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
+      .faq summary::-webkit-details-marker { display: none; }
+      .faq summary::after { content: ''; flex: none; width: 9px; height: 9px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(45deg); transition: transform 0.2s; margin-top: -4px; }
+      .faq details[open] summary::after { transform: rotate(-135deg); margin-top: 4px; }
+      .faq p { padding: 0 22px 20px; font-size: 16px; color: var(--text); }
+
       /* ---------- final CTA / footer ---------- */
       .final { position: relative; margin-top: 120px; padding: 96px 0; text-align: center; overflow: hidden; border-top: 1px solid var(--line); background: var(--bg-soft); }
       .final::before { content: ''; position: absolute; inset: 0; z-index: 0; background: radial-gradient(600px 300px at 50% 0%, rgba(230, 180, 80, 0.14), transparent 70%); }
@@ -169,6 +315,7 @@
       /* ---------- responsive ---------- */
       @media (max-width: 1000px) {
         .grid { grid-template-columns: repeat(2, 1fr); }
+        .alts { grid-template-columns: repeat(2, 1fr); }
         .row, .row.flip { grid-template-columns: 1fr; gap: 32px; }
         .row.flip .copy { order: 0; }
         .steps { grid-template-columns: 1fr; }
@@ -182,7 +329,7 @@
         section { padding-top: 80px; }
         .row + .row { margin-top: 80px; }
         .head { margin-bottom: 40px; }
-        .grid, .themes { grid-template-columns: 1fr; }
+        .grid, .themes, .alts { grid-template-columns: 1fr; }
         .btn { padding: 13px 20px; }
         .final { padding: 72px 0; margin-top: 88px; }
         .foot-top, .foot-bottom { flex-direction: column; align-items: flex-start; }
@@ -200,7 +347,8 @@
             <li><a href="#features">Features</a></li>
             <li><a href="#tour">Product tour</a></li>
             <li><a href="#themes">Themes</a></li>
-            <li><a href="#start">Get started</a></li>
+            <li><a href="#alternatives">Alternatives</a></li>
+            <li><a href="#faq">FAQ</a></li>
             <li><a href="https://github.com/gedelumbung/curlion" target="_blank" rel="noopener noreferrer">GitHub</a></li>
           </ul>
         </nav>
@@ -212,7 +360,7 @@
       <!-- ================= Hero ================= -->
       <div class="hero">
         <div class="wrap">
-          <span class="eyebrow"><i></i> Local-first · Team-ready · Free to run</span>
+          <span class="eyebrow"><i></i> Free API client · Local-first · Team-ready</span>
           <h1>An API client that doesn’t need a <em>jet engine.</em></h1>
           <p class="lede">
             Curlion is a fast, browser-based API client. Import your cURLs and Postman collections, test endpoints, and clock out on time — without your laptop fans preparing for takeoff.
@@ -222,6 +370,7 @@
             <a class="btn btn-ghost" href="#tour">Take the tour</a>
           </div>
           <p class="hint">Paste a cURL into the URL bar · <kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>Enter</kbd> to send</p>
+          <p class="alt-line">Looking for a Postman, Insomnia, Bruno, Yaak, Thunder Client or Hoppscotch alternative? Curlion runs in your browser, with nothing to install. <a href="#alternatives">See how it compares</a>.</p>
 
           <div class="window">
             <div class="bar" aria-hidden="true"><i></i><i></i><i></i><span>Curlion — Acme Store API</span></div>
@@ -431,6 +580,44 @@
         </div>
       </section>
 
+      <!-- ================= Alternatives ================= -->
+      <section id="alternatives">
+        <div class="wrap">
+          <div class="head head-wide">
+            <span class="kicker">Switching from another API client?</span>
+            <h2>A lightweight alternative to Postman, Insomnia, Bruno, Yaak, Thunder Client and Hoppscotch.</h2>
+            <p>Curlion imports Postman Collection v2.1 files and raw cURL commands. If your current tool can export a Postman collection or copy a request as cURL, you can bring your requests across in minutes.</p>
+          </div>
+          <div class="alts">
+            <article class="card">
+              <h3>Postman alternative</h3>
+              <p>Import your Postman Collection v2.1 files (folders, auth, bodies, saved responses and variables) and keep working with environments, history and published docs. Pre-request and test scripts aren&#x27;t supported, so use Post-Response extraction for token chaining.</p>
+            </article>
+            <article class="card">
+              <h3>Insomnia alternative</h3>
+              <p>Insomnia is a cross-platform desktop app. Curlion is a web app: open a tab and start sending requests, with nothing to install. Paste a cURL into the URL bar to bring a request over.</p>
+            </article>
+            <article class="card">
+              <h3>Bruno alternative</h3>
+              <p>Bruno keeps collections as plain files on disk that you can commit to Git. Curlion keeps them in your browser, with optional team sync to a Supabase project you control. Pick the model that fits how your team shares collections.</p>
+            </article>
+            <article class="card">
+              <h3>Yaak alternative</h3>
+              <p>Yaak is a desktop API client for REST, GraphQL, gRPC, WebSocket and SSE. Curlion covers REST, GraphQL, WebSocket, Socket.IO and gRPC in the browser, so there is no desktop app to install or update.</p>
+            </article>
+            <article class="card">
+              <h3>Thunder Client alternative</h3>
+              <p>Thunder Client runs inside your code editor (VS Code and JetBrains IDEs). Curlion is a standalone web app that works in any browser, whatever editor you use.</p>
+            </article>
+            <article class="card">
+              <h3>Hoppscotch alternative</h3>
+              <p>Hoppscotch and Curlion can both be used in the browser, so the workflow will feel familiar. Curlion keeps data in IndexedDB by default, syncs to your own Supabase project for teams, and imports and exports Postman v2.1.</p>
+            </article>
+          </div>
+          <p class="fine">Postman, Insomnia, Bruno, Yaak, Thunder Client and Hoppscotch are trademarks of their respective owners. Curlion is an independent project and is not affiliated with or endorsed by them. Descriptions of other tools are summaries and may change; check each project for current details.</p>
+        </div>
+      </section>
+
       <!-- ================= Get started ================= -->
       <section id="start">
         <div class="wrap">
@@ -463,6 +650,50 @@ VITE_SUPABASE_ANON_KEY</pre>
         </div>
       </section>
 
+      <!-- ================= FAQ ================= -->
+      <section id="faq">
+        <div class="wrap">
+          <div class="head">
+            <span class="kicker">FAQ</span>
+            <h2>Questions people ask before switching.</h2>
+          </div>
+          <div class="faq">
+            <details>
+              <summary>Is Curlion a good Postman alternative?</summary>
+              <p>Curlion covers the everyday Postman workflow: collections and folders, environments and variables, auth, request bodies, a response viewer, history, tabs, cURL and Postman import/export, code snippets and published docs. It runs in the browser and stores data locally by default. It does not run Postman&#x27;s pre-request and test scripts (they are skipped on import); Post-Response extraction handles token chaining. If your workflow depends on scripting, check that first.</p>
+            </details>
+            <details>
+              <summary>Can I import my Postman collections into Curlion?</summary>
+              <p>Yes. Curlion imports Postman Collection v2.1 JSON, including folders, auth, bodies, saved responses and variables (variables become an environment). You can also paste a raw cURL command into the URL bar, and export any collection back to Postman v2.1 JSON.</p>
+            </details>
+            <details>
+              <summary>How is Curlion different from Insomnia, Bruno and Yaak?</summary>
+              <p>Insomnia, Bruno and Yaak are desktop applications. Curlion is a web app: open a tab and start sending requests, with nothing to install. When you need to reach localhost or your local network, the optional Curlion Agent sends requests from your own computer.</p>
+            </details>
+            <details>
+              <summary>Is Curlion an alternative to Thunder Client?</summary>
+              <p>If you like a lightweight GUI client but don&#x27;t want it tied to your editor, yes. Thunder Client runs inside code editors (VS Code and JetBrains IDEs); Curlion is a standalone web app that works in any browser, whatever editor you use.</p>
+            </details>
+            <details>
+              <summary>How does Curlion compare to Hoppscotch?</summary>
+              <p>Both can be used in the browser, so the workflow will feel familiar. Curlion keeps your data in the browser&#x27;s IndexedDB by default, can sync saved changes to a Supabase project you control for team workspaces, imports and exports Postman v2.1, and publishes read-only docs from a collection.</p>
+            </details>
+            <details>
+              <summary>Which protocols does Curlion support?</summary>
+              <p>HTTP/REST, GraphQL (with a schema explorer), WebSocket, Socket.IO and gRPC. gRPC needs the Curlion Agent, which also lets any request reach localhost or a self-signed server.</p>
+            </details>
+            <details>
+              <summary>Is Curlion free?</summary>
+              <p>Curlion is designed to run on the free tiers of Netlify and Supabase, so hosting it for yourself or your team can cost $0. Running it locally only needs Node.js.</p>
+            </details>
+            <details>
+              <summary>Where is my data stored?</summary>
+              <p>In local mode, collections, environments, tabs and history stay in your browser&#x27;s IndexedDB. If you connect a Supabase project, saved changes sync to it, while each person&#x27;s current environment values (such as tokens) stay in their own browser.</p>
+            </details>
+          </div>
+        </div>
+      </section>
+
       <!-- ================= Final CTA ================= -->
       <div class="final">
         <div class="wrap">
@@ -485,7 +716,9 @@ VITE_SUPABASE_ANON_KEY</pre>
               <li><a href="#features">Features</a></li>
               <li><a href="#tour">Product tour</a></li>
               <li><a href="#themes">Themes</a></li>
+              <li><a href="#alternatives">Alternatives</a></li>
               <li><a href="#start">Get started</a></li>
+              <li><a href="#faq">FAQ</a></li>
               <li><a href="https://github.com/gedelumbung/curlion" target="_blank" rel="noopener noreferrer">GitHub</a></li>
             </ul>
           </nav>

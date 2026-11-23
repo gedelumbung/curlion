@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /landing/
+# Published API docs are for signed-in users only; the proxy and mock endpoints are not pages.
+Disallow: /docs/
+Disallow: /api/
+Disallow: /mock/
+
+Sitemap: https://curlion-app.netlify.app/sitemap.xml
