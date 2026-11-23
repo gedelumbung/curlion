@@ -154,6 +154,10 @@ export const baseTheme = EditorView.theme(
     '.cm-tooltip-autocomplete > ul > li[aria-selected]': { backgroundColor: 'var(--color-zinc-800)', color: 'var(--color-zinc-100)' },
     '.cm-completionDetail': { color: 'var(--color-zinc-500)', marginLeft: '1em', fontStyle: 'normal' },
     '.cm-selectionBackground, &.cm-focused .cm-selectionBackground': { backgroundColor: 'var(--cm-selection) !important' },
+    // other occurrences of the selected text: a faint outline, so they never look more
+    // selected than the actual selection (CodeMirror's default is a strong green fill)
+    '.cm-selectionMatch': { backgroundColor: 'color-mix(in srgb, var(--cm-selection) 40%, transparent) !important', boxShadow: 'inset 0 0 0 1px var(--cm-selection)', borderRadius: '2px' },
+    '.cm-searchMatch.cm-selectionMatch': { backgroundColor: 'color-mix(in srgb, var(--color-orange-500) 25%, transparent) !important' },
     '.cm-searchMatch': { backgroundColor: 'color-mix(in srgb, var(--color-orange-500) 25%, transparent)' },
   },
 )

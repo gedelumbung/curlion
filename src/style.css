@@ -112,12 +112,12 @@
   color-scheme: dark;
   /* translucent layer behind modals: the app stays faintly visible underneath */
   --modal-scrim: rgb(5 7 10 / 0.62);
-  --cm-selection: rgb(64 159 255 / 0.22);
+  --cm-selection: rgb(64 159 255 / 0.32);
   --cm-active-line: rgb(255 255 255 / 0.03);
 }
 :root[data-theme='light'] {
   --modal-scrim: rgb(92 97 102 / 0.28);
-  --cm-selection: rgb(3 91 214 / 0.14);
+  --cm-selection: rgb(3 91 214 / 0.2);
   --cm-active-line: rgb(0 0 0 / 0.025);
 }
 
