@@ -5,6 +5,7 @@ import { autocompletion } from '@codemirror/autocomplete'
 import { HighlightStyle } from '@codemirror/language'
 import { tags as t } from '@lezer/highlight'
 import { DYNAMIC_DESCRIPTIONS, DYNAMIC_VARS } from './variables.js'
+import { URL_RE } from './links.js'
 
 /** Dispatch this effect to re-evaluate highlighting after the variable scope changes. */
 export const refreshVars = StateEffect.define()
@@ -170,3 +171,40 @@ export const singleLineTheme = EditorView.theme({
   '.cm-line': { padding: '0' },
   '.cm-scroller': { overflow: 'hidden', lineHeight: '1.5' },
 })
+
+const urlMatcher = new MatchDecorator({
+  regexp: URL_RE,
+  decoration: (m) => Decoration.mark({ class: 'cm-url', attributes: { 'data-url': m[0], title: `Open ${m[0]} in a new tab` } }),
+})
+
+/**
+ * Underlines http(s) URLs and opens them in a new tab on click (for read-only editors such as
+ * the response viewer). A click that ends a text selection does not open the link.
+ */
+export function urlLinks() {
+  return [
+    ViewPlugin.fromClass(
+      class {
+        constructor(view) {
+          this.decorations = urlMatcher.createDeco(view)
+        }
+        update(u) {
+          this.decorations = urlMatcher.updateDeco(u, this.decorations)
+        }
+      },
+      { decorations: (v) => v.decorations },
+    ),
+    EditorView.domEventHandlers({
+      click(e, view) {
+        const el = e.target instanceof Element ? e.target.closest('.cm-url[data-url]') : null
+        if (!el || e.button !== 0 || !view.state.selection.main.empty) return false
+        window.open(el.dataset.url, '_blank', 'noopener,noreferrer')
+        return true
+      },
+    }),
+    EditorView.theme({
+      '.cm-url': { textDecoration: 'underline', textDecorationColor: 'color-mix(in srgb, currentColor 45%, transparent)', textUnderlineOffset: '2px', cursor: 'pointer' },
+      '.cm-url:hover': { textDecorationColor: 'currentColor' },
+    }),
+  ]
+}

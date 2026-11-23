@@ -21,7 +21,7 @@ import { highlightSelectionMatches, searchKeymap } from '@codemirror/search'
 import { json } from '@codemirror/lang-json'
 import { xml } from '@codemirror/lang-xml'
 import { html } from '@codemirror/lang-html'
-import { baseTheme, highlightStyleFor, codeTheme, refreshVars, variableClick, variableCompletion, variableHighlighter } from '../lib/cm.js'
+import { baseTheme, highlightStyleFor, codeTheme, refreshVars, urlLinks, variableClick, variableCompletion, variableHighlighter } from '../lib/cm.js'
 import { openVarPopover, scope } from '../store.js'
 import { palette, theme } from '../lib/theme.js'
 import { indentString, settings } from '../lib/settings.js'
@@ -32,6 +32,7 @@ const props = defineProps({
   readonly: { type: Boolean, default: false },
   variables: { type: Boolean, default: true },
   wrap: { type: Boolean, default: false },
+  links: { type: Boolean, default: false }, // make http(s) URLs clickable (opens a new tab)
 })
 const emit = defineEmits(['update:modelValue'])
 
@@ -84,6 +85,7 @@ onMounted(() => {
         langConf.of(langExt(props.language)),
         wrapConf.of(props.wrap ? EditorView.lineWrapping : []),
         EditorState.readOnly.of(props.readonly),
+        props.links ? urlLinks() : [],
         props.variables ? [variableHighlighter(() => scope.value), variableCompletion(() => scope.value), variableClick(openVarPopover)] : [],
         EditorView.updateListener.of((u) => {
           if (u.docChanged && !props.readonly) emit('update:modelValue', u.state.doc.toString())

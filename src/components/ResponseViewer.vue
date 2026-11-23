@@ -5,6 +5,7 @@ import CodeEditor from './CodeEditor.vue'
 import JsonTree from './JsonTree.vue'
 import { activeError, activeLoading, activeRequest, activeResponse, addSampleNow, isHistoryId, state, toast } from '../store.js'
 import { kv, newSample } from '../lib/model.js'
+import { linkParts } from '../lib/links.js'
 import { copyText, formatSize, statusColor } from '../lib/ui.js'
 import { saveResponseFile } from '../lib/http.js'
 import { indentString } from '../lib/settings.js'
@@ -115,7 +116,7 @@ function saveAsSample() {
             <JsonTree :value="res.json" />
           </div>
           <div v-else class="min-h-0 flex-1">
-            <CodeEditor :model-value="view === 'raw' ? res.body : pretty" :language="view === 'raw' ? 'text' : lang" readonly :variables="false" :wrap="wrap || view === 'raw'" />
+            <CodeEditor :model-value="view === 'raw' ? res.body : pretty" :language="view === 'raw' ? 'text' : lang" readonly :variables="false" links :wrap="wrap || view === 'raw'" />
           </div>
         </div>
       </template>
@@ -124,7 +125,7 @@ function saveAsSample() {
         <tbody>
           <tr v-for="(h, i) in res.headers" :key="i" class="border-t border-zinc-800">
             <td class="w-1/3 px-4 py-1.5 align-top font-mono text-[13px] text-zinc-400">{{ h.key }}</td>
-            <td class="px-4 py-1.5 font-mono text-[13px] break-all text-zinc-200">{{ h.value }}</td>
+            <td class="px-4 py-1.5 font-mono text-[13px] break-all text-zinc-200"><template v-for="(p, j) in linkParts(h.value)" :key="j"><a v-if="p.url" :href="p.url" target="_blank" rel="noopener noreferrer" class="underline decoration-current/45 underline-offset-2 hover:decoration-current" :title="`Open ${p.url} in a new tab`">{{ p.text }}</a><template v-else>{{ p.text }}</template></template></td>
           </tr>
         </tbody>
       </table>

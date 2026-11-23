@@ -2,6 +2,7 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { ChevronRight } from 'lucide-vue-next'
+import { linkParts } from '../lib/links.js'
 
 defineOptions({ name: 'JsonTree' })
 const props = defineProps({
@@ -41,7 +42,7 @@ const prim = computed(() => {
     </template>
     <div v-else class="pl-3.5">
       <span v-if="name !== null" class="text-sky-300">{{ typeof name === 'number' ? name : JSON.stringify(name) }}</span><span v-if="name !== null" class="text-zinc-500">: </span>
-      <span :class="prim.cls" class="break-all">{{ prim.text }}</span><span class="text-zinc-500">{{ last ? '' : ',' }}</span>
+      <span :class="prim.cls" class="break-all"><template v-for="(p, i) in linkParts(prim.text)" :key="i"><a v-if="p.url" :href="p.url" target="_blank" rel="noopener noreferrer" class="underline decoration-current/45 underline-offset-2 hover:decoration-current" :title="`Open ${p.url} in a new tab`">{{ p.text }}</a><template v-else>{{ p.text }}</template></template></span><span class="text-zinc-500">{{ last ? '' : ',' }}</span>
     </div>
   </div>
 </template>
