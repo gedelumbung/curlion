@@ -5,7 +5,7 @@ import Modal from './Modal.vue'
 import UiSelect from './UiSelect.vue'
 import { importPostman } from '../lib/postman.js'
 import { parseCurl } from '../lib/curl.js'
-import { addCollection, addEnvironment, addRequest, createCollection, openRequest, state, toast } from '../store.js'
+import { addCollection, addEnvironment, addRequest, createCollection, openRequest, state, toast, wsCollections } from '../store.js'
 
 const emit = defineEmits(['close'])
 const tab = ref('postman')
@@ -14,9 +14,9 @@ const warnings = ref([])
 const curlText = ref('')
 const pasted = ref('')
 const dragging = ref(false)
-const targetCollectionId = ref(state.active?.collectionId || state.collections[0]?.id || '__new__')
+const targetCollectionId = ref(state.active?.collectionId || wsCollections.value[0]?.id || '__new__')
 const collectionOptions = computed(() => [
-  ...state.collections.map((c) => ({ value: c.id, label: c.name })),
+  ...wsCollections.value.map((c) => ({ value: c.id, label: c.name })),
   { value: '__new__', label: '+ New collection', class: 'text-orange-400' },
 ])
 

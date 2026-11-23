@@ -3,15 +3,15 @@
 import { computed, onMounted, ref } from 'vue'
 import Modal from './Modal.vue'
 import UiSelect from './UiSelect.vue'
-import { answerSavePrompt, state } from '../store.js'
+import { answerSavePrompt, state, wsCollections } from '../store.js'
 
 const p = state.savePrompt
 const name = ref(p.name || 'New Request')
-const activeCol = state.collections.find((c) => c.id === state.tabs.find((t) => t.requestId !== p.requestId && t.collectionId)?.collectionId)
-const collectionId = ref(activeCol?.id || state.collections[0]?.id || '__new__')
+const activeCol = wsCollections.value.find((c) => c.id === state.tabs.find((t) => t.requestId !== p.requestId && t.collectionId)?.collectionId)
+const collectionId = ref(activeCol?.id || wsCollections.value[0]?.id || '__new__')
 const newCollectionName = ref('My Collection')
 const options = computed(() => [
-  ...state.collections.map((c) => ({ value: c.id, label: c.name })),
+  ...wsCollections.value.map((c) => ({ value: c.id, label: c.name })),
   { value: '__new__', label: '+ New collection', class: 'text-orange-400' },
 ])
 const nameInput = ref(null)

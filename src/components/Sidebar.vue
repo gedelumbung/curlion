@@ -16,6 +16,8 @@ import {
   duplicateNode,
   openRequest,
   state,
+  wsCollections,
+  wsHistory,
   roleOf,
   toggleExpanded,
   touchCollection,
@@ -135,7 +137,7 @@ const fmtTime = (ts) => new Date(ts).toLocaleString(undefined, { hour: '2-digit'
       </div>
 
       <div class="min-h-0 flex-1 overflow-y-auto px-1 pb-4">
-        <template v-for="col in state.collections" :key="col.id">
+        <template v-for="col in wsCollections" :key="col.id">
           <div v-if="colVisible(col)">
             <div
               class="tree-row group gap-1.5 px-1 font-medium text-zinc-300"
@@ -178,7 +180,7 @@ const fmtTime = (ts) => new Date(ts).toLocaleString(undefined, { hour: '2-digit'
             </div>
           </div>
         </template>
-        <div v-if="!state.collections.length" class="p-4 text-center text-sm text-zinc-500">
+        <div v-if="!wsCollections.length" class="p-4 text-center text-sm text-zinc-500">
           No collections yet.
           <button class="mt-2 block w-full rounded bg-zinc-800 py-1.5 text-zinc-200 hover:bg-zinc-700" @click="newCollection">Create collection</button>
         </div>
@@ -187,11 +189,11 @@ const fmtTime = (ts) => new Date(ts).toLocaleString(undefined, { hour: '2-digit'
 
     <template v-else>
       <div class="flex items-center justify-between px-3 py-2 text-xs text-zinc-500">
-        <span>Last {{ state.history.length }} requests</span>
-        <button v-if="state.history.length" class="hover:text-red-400" @click="askClearHistory">Clear</button>
+        <span>Last {{ wsHistory.length }} requests</span>
+        <button v-if="wsHistory.length" class="hover:text-red-400" @click="askClearHistory">Clear</button>
       </div>
       <div class="min-h-0 flex-1 overflow-y-auto px-1 pb-4">
-        <button v-for="h in state.history" :key="h.id" class="flex w-full cursor-pointer flex-col rounded px-2 py-1.5 text-left hover:bg-zinc-800/60" @click="openHistory(h)" @dblclick="openHistoryEntry(h, { preview: false })" :title="h.request ? 'Open this request as it was sent' : 'Open (older entry: method and URL only)'">
+        <button v-for="h in wsHistory" :key="h.id" class="flex w-full cursor-pointer flex-col rounded px-2 py-1.5 text-left hover:bg-zinc-800/60" @click="openHistory(h)" @dblclick="openHistoryEntry(h, { preview: false })" :title="h.request ? 'Open this request as it was sent' : 'Open (older entry: method and URL only)'">
           <span class="flex items-center gap-2 text-[13px]">
             <span class="font-mono text-[10px] font-bold" :class="methodColor[h.method]">{{ h.method }}</span>
             <span class="truncate text-zinc-300">{{ h.name }}</span>

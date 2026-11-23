@@ -11,6 +11,9 @@ const SCHEMA = {
   meta: 'key', // { key, value } misc settings (active env, mode, last request...)
 }
 db.version(1).stores(SCHEMA)
+// v2: workspaces ({ id, name, isPersonal, ownerId }); collections, environments and history
+// entries carry a workspaceId (not indexed: lists are small and kept in memory)
+db.version(2).stores({ ...SCHEMA, workspaces: 'id' })
 
 // Database names used by earlier versions of the app, newest first
 // (PostLite -> Echo -> Beacon -> Curlion). The newest one that exists already holds the data

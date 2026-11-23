@@ -9,17 +9,22 @@ import { AGENT_DEFAULT_PORT, agentBase, pingAgent, sendRequest } from './lib/htt
 import { connectSocketIo, connectWsAgent, connectWsDirect } from './lib/realtime.js'
 import { GRPC_STATUS, decodeMessage, encodeMessage, findMethod, parseProto } from './lib/grpc.js'
 import { indentString } from './lib/settings.js'
-import { collectionToRow, environmentToRow, rowToCollection, rowToEnvironment, supabase } from './lib/supabase.js'
+import { collectionToRow, environmentToRow, rowToCollection, rowToEnvironment, rowToWorkspace, supabase } from './lib/supabase.js'
 import { countRequests, diffTrees } from './lib/activity.js'
 import { buildDocsSnapshot } from './lib/publish.js'
 
 const SAVE_DELAY = 300 // IndexedDB write debounce
 const SYNC_DELAY = 3000 // Supabase debounced auto-save (PRD §7.1)
-const HISTORY_LIMIT = 100
+const HISTORY_LIMIT = 100 // per workspace
 const ACTIVITY_DELAY = 60_000 // collapse edits into one activity entry per minute
+
+/** The "Team" workspace created by migration 008: holds everything shared before workspaces existed. */
+export const TEAM_WORKSPACE_ID = '00000000-0000-0000-0000-000000000001'
 
 export const state = reactive({
   ready: false,
+  workspaces: [], // { id, name, isPersonal, ownerId }
+  workspaceId: null, // current workspace: the sidebar, environments, history and activity show only its items
   collections: [],
   environments: [],
   envCurrent: {}, // this user's current values: envId -> varId -> value (browser only, never synced)
@@ -52,8 +57,17 @@ if (import.meta.env?.DEV && typeof window !== "undefined") window.__curlion = { 
 
 // ---- Derived ------------------------------------------------------------
 
+const inWorkspace = (x) => x.workspaceId === state.workspaceId
+export const currentWorkspace = computed(() => state.workspaces.find((w) => w.id === state.workspaceId) || null)
+/** Collections of the current workspace. */
+export const wsCollections = computed(() => state.collections.filter(inWorkspace))
+/** Environments of the current workspace (Globals not included: they apply in every workspace). */
+export const wsEnvironments = computed(() => state.environments.filter((e) => !e.isGlobal && inWorkspace(e)))
+/** History of the current workspace (entries from before workspaces existed show everywhere). */
+export const wsHistory = computed(() => state.history.filter((h) => !h.workspaceId || inWorkspace(h)))
+
 export const globalEnv = computed(() => state.environments.find((e) => e.isGlobal))
-export const activeEnv = computed(() => state.environments.find((e) => e.id === state.activeEnvId && !e.isGlobal) || null)
+export const activeEnv = computed(() => state.environments.find((e) => e.id === state.activeEnvId && !e.isGlobal && inWorkspace(e)) || null)
 export const scope = computed(() => buildScope(globalEnv.value, activeEnv.value, state.envCurrent))
 
 export const activeCollection = computed(() => state.collections.find((c) => c.id === state.active?.collectionId) || null)
@@ -198,10 +212,12 @@ export async function init() {
   } catch (err) {
     console.warn('Legacy data migration failed', err)
   }
-  const [cols, envs, history, activeEnvId, mode, active, expanded] = await Promise.all([
+  const [workspaces, workspaceId, cols, envs, history, activeEnvId, mode, active, expanded] = await Promise.all([
+    db.workspaces.toArray(),
+    getMeta('workspaceId'),
     db.collections.toArray(),
     db.environments.toArray(),
-    db.history.orderBy('ts').reverse().limit(HISTORY_LIMIT).toArray(),
+    db.history.orderBy('ts').reverse().toArray(),
     getMeta('activeEnvId'),
     getMeta('mode', 'direct'),
     getMeta('active'),
@@ -213,6 +229,11 @@ export async function init() {
   state.collections = cols
   state.environments = envs
   state.history = history
+  state.workspaces = sortWorkspaces(workspaces)
+  state.workspaceId = workspaceId
+  if (!supabase) await ensureLocalPersonalWorkspace()
+  await placeUnassigned(supabase ? TEAM_WORKSPACE_ID : state.workspaces.find((w) => w.isPersonal)?.id)
+  if (!state.workspaces.some((w) => w.id === state.workspaceId)) state.workspaceId = defaultWorkspaceId()
   state.activeEnvId = activeEnvId
   state.mode = mode
   state.expanded = expanded || {}
@@ -267,11 +288,169 @@ export async function init() {
   state.ready = true
 }
 
+// ---- Workspaces -----------------------------------------------------------
+// Like Postman: collections, environments, history and the activity log belong to a
+// workspace. Team workspaces are visible to every signed-in user; each user also has a
+// personal "My Workspace" that only they can see. Globals apply in every workspace.
+
+const sortWorkspaces = (list) =>
+  [...list].sort((a, b) => (b.isPersonal ? 1 : 0) - (a.isPersonal ? 1 : 0) || (a.id === TEAM_WORKSPACE_ID ? -1 : b.id === TEAM_WORKSPACE_ID ? 1 : 0) || a.name.localeCompare(b.name))
+
+function defaultWorkspaceId() {
+  const list = state.workspaces
+  return list.find((w) => w.id === TEAM_WORKSPACE_ID)?.id || list.find((w) => w.isPersonal)?.id || list[0]?.id || (supabase ? TEAM_WORKSPACE_ID : null)
+}
+
+/** Local-only mode: the browser keeps its own workspaces, starting with "My Workspace". */
+async function ensureLocalPersonalWorkspace() {
+  if (state.workspaces.some((w) => w.isPersonal)) return
+  const ws = { id: uid(), name: 'My Workspace', isPersonal: true, ownerId: null, createdAt: new Date().toISOString() }
+  state.workspaces = sortWorkspaces([...state.workspaces, ws])
+  await db.workspaces.put(plain(ws))
+}
+
+/** Data saved before workspaces existed goes into the given workspace. */
+async function placeUnassigned(workspaceId) {
+  if (!workspaceId) return
+  for (const col of state.collections) {
+    if (col.workspaceId) continue
+    col.workspaceId = workspaceId
+    await db.collections.put(plain(col))
+  }
+  for (const env of state.environments) {
+    if (env.isGlobal || env.workspaceId) continue
+    env.workspaceId = workspaceId
+    await db.environments.put(plain(env))
+  }
+}
+
+/** Fetch the workspaces this user can see; create their personal one on first sign-in. */
+async function syncWorkspaces() {
+  const fetchAll = async () => {
+    const { data, error } = await supabase.from('workspaces').select('*')
+    if (error) throw error
+    return data.map(rowToWorkspace)
+  }
+  let list = await fetchAll()
+  if (!list.some((w) => w.isPersonal && w.ownerId === state.user.id)) {
+    const { error } = await supabase.from('workspaces').insert({ name: 'My Workspace', is_personal: true, owner_id: state.user.id })
+    if (error && error.code !== '23505') throw error // 23505: another tab created it first
+    list = await fetchAll()
+  }
+  await setWorkspaces(list)
+}
+
+async function setWorkspaces(list) {
+  state.workspaces = sortWorkspaces(list)
+  await db.transaction('rw', db.workspaces, async () => {
+    await db.workspaces.clear()
+    await db.workspaces.bulkPut(state.workspaces.map(plain))
+  })
+  if (!state.workspaces.some((w) => w.id === state.workspaceId)) {
+    // the current workspace was deleted by its creator (or is not visible any more)
+    closeTabs(() => true)
+    await enterWorkspace(defaultWorkspaceId())
+  }
+}
+
+async function enterWorkspace(id) {
+  state.workspaceId = id
+  await setMeta('workspaceId', id)
+  const envId = ((await getMeta('envByWorkspace', {})) || {})[id] || null
+  state.activeEnvId = state.environments.some((e) => e.id === envId && !e.isGlobal && e.workspaceId === id) ? envId : null
+  await setMeta('activeEnvId', state.activeEnvId)
+}
+
+/**
+ * Switch to another workspace. Its tabs are closed first (unsaved changes are confirmed
+ * like closing tabs). Returns false when the user cancels.
+ */
+export async function switchWorkspace(id) {
+  if (id === state.workspaceId) return true
+  if (!state.workspaces.some((w) => w.id === id)) return false
+  if (!(await requestCloseTabs(state.tabs.map((t) => t.requestId)))) return false
+  await enterWorkspace(id)
+  return true
+}
+
+/** Every user can create team workspaces; the new one becomes the current workspace. */
+export async function createWorkspace(name) {
+  name = name.trim() || 'New Workspace'
+  let ws
+  if (supabase && state.user) {
+    const { data, error } = await supabase.from('workspaces').insert({ name, owner_id: state.user.id }).select().single()
+    if (error) throw error
+    ws = rowToWorkspace(data)
+    logEvent('CREATE_WORKSPACE', { targetName: name })
+  } else {
+    ws = { id: uid(), name, isPersonal: false, ownerId: null, createdAt: new Date().toISOString() }
+  }
+  state.workspaces = sortWorkspaces([...state.workspaces, ws])
+  await db.workspaces.put(plain(ws))
+  await switchWorkspace(ws.id)
+  return ws
+}
+
+export async function renameWorkspace(id, name) {
+  const ws = state.workspaces.find((w) => w.id === id)
+  name = name.trim()
+  if (!ws || !name || name === ws.name) return
+  const from = ws.name
+  if (supabase && state.user) {
+    const { error } = await supabase.from('workspaces').update({ name, updated_at: new Date().toISOString() }).eq('id', id)
+    if (error) throw error
+    if (!ws.isPersonal) logEvent('RENAME_WORKSPACE', { workspaceId: id, targetName: name, metadata: { from, to: name } })
+  }
+  ws.name = name
+  state.workspaces = sortWorkspaces(state.workspaces)
+  await db.workspaces.put(plain(ws))
+}
+
+/** Team workspaces can be deleted by their creator; My Workspace and "Team" cannot. */
+export const canDeleteWorkspace = (ws) => !!ws && !ws.isPersonal && ws.id !== TEAM_WORKSPACE_ID && (!supabase || ws.ownerId === state.user?.id)
+
+/** Deletes the workspace with all its collections and environments, for everyone. */
+export async function deleteWorkspace(id) {
+  const ws = state.workspaces.find((w) => w.id === id)
+  if (!canDeleteWorkspace(ws)) return false
+  if (state.workspaceId === id) {
+    const next = state.workspaces.find((w) => w.id !== id && w.isPersonal)?.id || state.workspaces.find((w) => w.id !== id)?.id
+    if (!next || !(await switchWorkspace(next))) return false
+  }
+  const cols = state.collections.filter((c) => c.workspaceId === id)
+  const envs = state.environments.filter((e) => !e.isGlobal && e.workspaceId === id)
+  // pending saves / syncs of its collections and environments must not re-create them
+  for (const c of cols) for (const k of ['save:col:', 'sync:col:', 'activity:']) await flushTimers(k + c.id)
+  for (const e of envs) for (const k of ['save:env:', 'sync:env:']) await flushTimers(k + e.id)
+  if (supabase && state.user) {
+    const { error } = await supabase.from('workspaces').delete().eq('id', id) // cascades to its collections and environments
+    if (error) throw error
+    logEvent('DELETE_WORKSPACE', { targetName: ws.name, metadata: { collections: cols.length, environments: envs.length } })
+  }
+  const colIds = new Set(cols.map((c) => c.id))
+  const envIds = new Set(envs.map((e) => e.id))
+  state.collections = state.collections.filter((c) => !colIds.has(c.id))
+  state.environments = state.environments.filter((e) => !envIds.has(e.id))
+  const histIds = state.history.filter((h) => h.workspaceId === id).map((h) => h.id)
+  state.history = state.history.filter((h) => h.workspaceId !== id)
+  state.workspaces = state.workspaces.filter((w) => w.id !== id)
+  await db.transaction('rw', db.workspaces, db.collections, db.environments, db.history, db.tombstones, async () => {
+    await db.workspaces.delete(id)
+    await db.collections.bulkDelete([...colIds])
+    await db.environments.bulkDelete([...envIds])
+    await db.history.bulkDelete(histIds)
+    await db.tombstones.bulkDelete([...colIds, ...envIds])
+  })
+  return true
+}
+
 // ---- Settings -----------------------------------------------------------
 
 export function setActiveEnv(id) {
   state.activeEnvId = id
   setMeta('activeEnvId', id)
+  // remembered per workspace, restored when switching back
+  getMeta('envByWorkspace', {}).then((m) => setMeta('envByWorkspace', { ...(m || {}), [state.workspaceId]: id }))
 }
 export function setMode(mode) {
   state.mode = mode
@@ -516,7 +695,7 @@ export function moveTab(from, to) {
 // ---- Collection CRUD ----------------------------------------------------
 
 export function createCollection(name = 'New Collection') {
-  const col = newCollection(name)
+  const col = { ...newCollection(name), workspaceId: state.workspaceId }
   state.collections.push(col)
   expand(col.id)
   persistCollection(col)
@@ -524,6 +703,7 @@ export function createCollection(name = 'New Collection') {
 }
 
 export function addCollection(col) {
+  col.workspaceId ||= state.workspaceId
   state.collections.push(col)
   expand(col.id)
   persistCollection(col)
@@ -632,7 +812,7 @@ export function moveNode(col, id, targetParentId, beforeId = null) {
 // ---- Environments -------------------------------------------------------
 
 export function createEnvironment(name) {
-  const env = newEnvironment(name)
+  const env = { ...newEnvironment(name), workspaceId: state.workspaceId }
   state.environments.push(env)
   persistEnvironment(env)
   return env
@@ -699,6 +879,7 @@ async function moveSecretsToCurrentValues() {
 export const canDeleteEnv = (env) => !!env && !env.isGlobal && (!env.ownerId || !state.user || env.ownerId === state.user.id)
 
 export function addEnvironment(env) {
+  if (!env.isGlobal) env.workspaceId ||= state.workspaceId
   state.environments.push(env)
   persistEnvironment(env)
 }
@@ -985,6 +1166,7 @@ function runExtract(req, res) {
 async function addHistory(req, resolved, res) {
   const entry = {
     ts: Date.now(),
+    workspaceId: state.workspaceId,
     requestId: req.id,
     collectionId: state.active?.collectionId,
     name: req.name,
@@ -996,9 +1178,11 @@ async function addHistory(req, resolved, res) {
   }
   const id = await db.history.add(entry)
   state.history.unshift({ ...entry, id })
-  if (state.history.length > HISTORY_LIMIT) {
-    const extra = state.history.splice(HISTORY_LIMIT)
-    db.history.bulkDelete(extra.map((e) => e.id))
+  const extra = state.history.filter((h) => h.workspaceId === entry.workspaceId).slice(HISTORY_LIMIT)
+  if (extra.length) {
+    const drop = new Set(extra.map((e) => e.id))
+    state.history = state.history.filter((h) => !drop.has(h.id))
+    db.history.bulkDelete([...drop])
   }
 }
 
@@ -1055,9 +1239,12 @@ export function answerSavePrompt(answer) {
   state.savePrompt?.resolve(answer)
 }
 
+/** Clears the history shown in the current workspace. */
 export async function clearHistory() {
-  state.history = []
-  await db.history.clear()
+  const ids = wsHistory.value.map((h) => h.id)
+  const drop = new Set(ids)
+  state.history = state.history.filter((h) => !drop.has(h.id))
+  await db.history.bulkDelete(ids)
 }
 
 // ---- Cloud sync (Supabase) ---------------------------------------------
@@ -1087,16 +1274,18 @@ async function clearLocalData() {
   for (const id of [...controllers.keys()]) cancel(id)
   for (const id of [...realtime.keys()]) disconnectRealtime(id)
   await flushTimers('') // drop pending debounced saves/syncs of the old data
-  await db.transaction('rw', db.collections, db.environments, db.history, db.tombstones, async () => {
-    await Promise.all([db.collections.clear(), db.environments.clear(), db.history.clear(), db.tombstones.clear()])
+  await db.transaction('rw', db.workspaces, db.collections, db.environments, db.history, db.tombstones, async () => {
+    await Promise.all([db.workspaces.clear(), db.collections.clear(), db.environments.clear(), db.history.clear(), db.tombstones.clear()])
   })
-  await Promise.all(['tabs', 'active', 'activeEnvId', 'lastUserId', 'envCurrent', 'drafts'].map((k) => db.meta.delete(k)))
+  await Promise.all(['tabs', 'active', 'activeEnvId', 'envByWorkspace', 'workspaceId', 'lastUserId', 'envCurrent', 'drafts'].map((k) => db.meta.delete(k)))
   draftBase.clear()
   activityBase.clear()
   pendingLogs.clear()
   const globals = newEnvironment('Globals', true)
   await db.environments.put(plain(globals))
   Object.assign(state, {
+    workspaces: [],
+    workspaceId: TEAM_WORKSPACE_ID,
     collections: [],
     environments: [globals],
     envCurrent: {},
@@ -1138,6 +1327,7 @@ async function syncOne(kind, id) {
 }
 
 async function pushCollection(col) {
+  col.workspaceId ||= state.workspaceId
   const row = collectionToRow(plain(col), state.user.id)
   // Editors of someone else's collection may update but not insert (RLS).
   const { error } =
@@ -1164,6 +1354,7 @@ async function pushCollection(col) {
 }
 
 async function pushEnvironment(env) {
+  if (!env.isGlobal) env.workspaceId ||= state.workspaceId
   const row = environmentToRow(plain(env), env.ownerId || state.user.id)
   // Other people's (shared) environments may be updated but not inserted (RLS).
   const { error } =
@@ -1201,6 +1392,7 @@ export async function syncAll() {
   state.sync.status = 'syncing'
   try {
     await pushTombstones()
+    await syncWorkspaces()
 
     const [{ data: rCols, error: e1 }, { data: rEnvs, error: e2 }] = await Promise.all([
       supabase.from('collections').select('*'),
@@ -1244,8 +1436,11 @@ async function mergeList(localList, remoteList, table, push) {
       localList.splice(localList.indexOf(local), 1)
       await db[table].delete(local.id)
     }
+    const workspaceGone = !!local.workspaceId && !state.workspaces.some((w) => w.id === local.workspaceId)
+    if (remote) local.workspaceId = remote.workspaceId
     if (!remote) {
-      if (mine && local.syncedAt) await drop() // deleted on another device
+      if (workspaceGone) await drop() // its workspace was deleted
+      else if (mine && local.syncedAt) await drop() // deleted on another device
       else if (mine) await push(local) // never synced: upload
       else await drop() // someone else's collection that was deleted by its creator
     } else if ((remote.updatedAt || '') > (local.updatedAt || '')) {
@@ -1345,10 +1540,11 @@ if (typeof document !== 'undefined') {
 }
 
 /** Write one activity entry right away (account events, collection deletion). */
-async function logEvent(action, { user = state.user, collectionId = null, collectionName = null, targetName, metadata = {} } = {}) {
+async function logEvent(action, { user = state.user, collectionId = null, collectionName = null, workspaceId = null, targetName, metadata = {} } = {}) {
   if (!supabase || !user) return
   const { error } = await supabase.from('activity_logs').insert({
     action,
+    workspace_id: workspaceId, // filled in from the collection by the database when null
     target_name: targetName ?? user.email,
     collection_id: collectionId,
     collection_name: collectionName,
@@ -1363,21 +1559,29 @@ async function logEvent(action, { user = state.user, collectionId = null, collec
 export const logSignIn = (user) => logEvent('SIGN_IN', { user })
 
 /**
- * Activity across the whole workspace, newest first (activity dashboard).
+ * Activity in the current workspace, newest first (activity dashboard). Team workspaces
+ * also show account events (sign in / out, workspaces created or deleted); a personal
+ * workspace shows only its own entries.
  * filters: { actorId, collectionId, action, since (ISO), search, before (ISO, for paging) }
  */
 export async function fetchAllActivity(filters = {}, limit = 200) {
   await flushAllActivity()
   let q = supabase.from('activity_logs').select('*').order('created_at', { ascending: false }).limit(limit)
+  const ws = currentWorkspace.value
+  const wsFilter = ws?.isPersonal ? null : `workspace_id.eq.${state.workspaceId},workspace_id.is.null`
+  if (!wsFilter) q = q.eq('workspace_id', state.workspaceId)
   if (filters.actorId) q = q.eq('actor_id', filters.actorId)
-  if (filters.collectionId === '__account__') q = q.is('collection_id', null).in('action', ['SIGN_IN', 'SIGN_OUT'])
+  if (filters.collectionId === '__account__') q = q.is('workspace_id', null)
   else if (filters.collectionId) q = q.eq('collection_id', filters.collectionId)
   if (filters.action) q = q.eq('action', filters.action)
   if (filters.since) q = q.gte('created_at', filters.since)
   if (filters.before) q = q.lt('created_at', filters.before)
   if (filters.search?.trim()) {
     const term = filters.search.trim().replace(/[%,()]/g, ' ')
-    q = q.or(`target_name.ilike.%${term}%,collection_name.ilike.%${term}%,actor_email.ilike.%${term}%`)
+    const searchFilter = `target_name.ilike.%${term}%,collection_name.ilike.%${term}%,actor_email.ilike.%${term}%`
+    q = q.or(wsFilter && filters.collectionId !== '__account__' ? `and(or(${wsFilter}),or(${searchFilter}))` : searchFilter)
+  } else if (wsFilter && filters.collectionId !== '__account__') {
+    q = q.or(wsFilter)
   }
   const { data, error } = await q
   if (error) throw error

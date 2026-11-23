@@ -23,7 +23,8 @@ import SettingsModal from './components/SettingsModal.vue'
 import UnsavedDialog from './components/UnsavedDialog.vue'
 import SaveRequestDialog from './components/SaveRequestDialog.vue'
 import VarPopover from './components/VarPopover.vue'
-import { activeOverview, activeRequest, addNewRequest, checkAgent, cloudEnabled, init, openTabs, saveNow, send, setActiveEnv, setMode, signOut, state } from './store.js'
+import WorkspaceSwitcher from './components/WorkspaceSwitcher.vue'
+import { activeOverview, activeRequest, addNewRequest, checkAgent, cloudEnabled, init, openTabs, saveNow, send, setActiveEnv, setMode, signOut, state, wsEnvironments } from './store.js'
 
 const modal = ref(null) // env | import | code | collection | activity | agent | about | settings
 const collectionCtx = ref(null) // { col, tab }
@@ -41,7 +42,7 @@ const MODES = [
 
 const envOptions = computed(() => [
   { value: '', label: 'No environment', class: 'text-zinc-400' },
-  ...state.environments.filter((e) => !e.isGlobal).map((e) => ({ value: e.id, label: e.name })),
+  ...wsEnvironments.value.map((e) => ({ value: e.id, label: e.name })),
 ])
 
 // Agent button: switch to Agent mode; open the setup when it is already selected or not running
@@ -150,6 +151,8 @@ const syncLabel = {
         <CurlionLogo class="h-[22px] w-[22px]" />
         <span class="hidden text-[15px] font-semibold tracking-tight text-zinc-100 sm:inline">Curlion</span>
       </button>
+      <span class="mx-1 h-5 w-px bg-zinc-800"></span>
+      <WorkspaceSwitcher />
 
       <div class="ml-auto flex items-center gap-1.5 text-xs">
         <!-- Send mode -->

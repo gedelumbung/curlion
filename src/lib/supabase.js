@@ -11,6 +11,7 @@ export const supabase = url && key ? createClient(url, key) : null
 export const collectionToRow = (c, ownerId) => ({
   id: c.id,
   owner_id: c.ownerId || ownerId,
+  workspace_id: c.workspaceId,
   name: c.name,
   description: c.description || null,
   is_public: !!c.isPublic,
@@ -22,6 +23,7 @@ export const collectionToRow = (c, ownerId) => ({
 export const rowToCollection = (r) => ({
   id: r.id,
   ownerId: r.owner_id,
+  workspaceId: r.workspace_id,
   name: r.name,
   description: r.description || '',
   isPublic: r.is_public,
@@ -35,6 +37,7 @@ export const rowToCollection = (r) => ({
 export const environmentToRow = (e, ownerId) => ({
   id: e.id,
   owner_id: ownerId,
+  workspace_id: e.isGlobal ? null : e.workspaceId,
   name: e.name,
   is_global: !!e.isGlobal,
   variables: e.variables,
@@ -44,9 +47,18 @@ export const environmentToRow = (e, ownerId) => ({
 export const rowToEnvironment = (r) => ({
   id: r.id,
   ownerId: r.owner_id,
+  workspaceId: r.is_global ? null : r.workspace_id,
   name: r.name,
   isGlobal: r.is_global,
   variables: r.variables || [],
   updatedAt: r.updated_at,
   syncedAt: r.updated_at,
+})
+
+export const rowToWorkspace = (r) => ({
+  id: r.id,
+  name: r.name,
+  isPersonal: r.is_personal,
+  ownerId: r.owner_id,
+  createdAt: r.created_at,
 })

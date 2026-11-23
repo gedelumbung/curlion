@@ -5,6 +5,9 @@
 export const ACTIONS = {
   SIGN_IN: 'Signed in',
   SIGN_OUT: 'Signed out',
+  CREATE_WORKSPACE: 'Created workspace',
+  RENAME_WORKSPACE: 'Renamed workspace',
+  DELETE_WORKSPACE: 'Deleted workspace',
   CREATE_COLLECTION: 'Created collection',
   RENAME_COLLECTION: 'Renamed collection',
   DELETE_COLLECTION: 'Deleted collection',
@@ -100,6 +103,7 @@ export function describeLog(log) {
     }
     case 'RENAME_FOLDER':
     case 'RENAME_COLLECTION':
+    case 'RENAME_WORKSPACE':
       return `${m.from} → ${m.to}`
     case 'CREATE_REQUEST':
     case 'DELETE_REQUEST':
@@ -112,6 +116,8 @@ export function describeLog(log) {
     case 'CREATE_COLLECTION':
     case 'DELETE_COLLECTION':
       return m.requests !== undefined ? `${m.requests} request(s)` : ''
+    case 'DELETE_WORKSPACE':
+      return m.collections !== undefined ? `with ${m.collections} collection(s) and ${m.environments} environment(s)` : ''
     case 'PUBLISH_DOCS':
       return m.slug ? `/docs/${m.slug}` : ''
     case 'ADD_MEMBER':

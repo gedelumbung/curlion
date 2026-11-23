@@ -38,6 +38,7 @@ netlify dev        # runs Vite + edge functions at /api/proxy and /mock/*
    - [`005_admin_created_accounts.sql`](supabase/migrations/005_admin_created_accounts.sql): invite error message for admin-created accounts
    - [`006_team_workspace.sql`](supabase/migrations/006_team_workspace.sql): every signed-in user sees and edits every collection; activity history survives collection deletion and includes sign-in/out
    - [`007_shared_environments.sql`](supabase/migrations/007_shared_environments.sql): environments (except Globals) shared with everyone; blanks existing secret values on the server
+   - [`008_workspaces.sql`](supabase/migrations/008_workspaces.sql): workspaces (team + personal "My Workspace"); moves existing collections and environments into a "Team" workspace; activity log per workspace
 2. Copy `.env.example` to `.env` and fill in `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.
 3. In Supabase → Authentication → URL Configuration, set the Site URL to your site and add `https://<your-site>/**` (and `http://localhost:5173/**` for development) to Redirect URLs, so sign-in returns to the page it started from (e.g. a docs link).
 4. Lock down sign-in (accounts are created by an administrator; there is no sign-up or OAuth):
@@ -79,7 +80,7 @@ netlify dev        # runs Vite + edge functions at /api/proxy and /mock/*
 
 ## Phase 4 features (PRD §5)
 
-Per collection from the sidebar menu (right-click or `⋯`): **Publish docs** and **Activity log**. The workspace-wide **Activity** dashboard is in the header.
+Per collection from the sidebar menu (right-click or `⋯`): **Publish docs** and **Activity log**. The **Activity** dashboard for the current workspace is in the header.
 
 | Feature | Status |
 | --- | --- |
@@ -88,7 +89,8 @@ Per collection from the sidebar menu (right-click or `⋯`): **Publish docs** an
 | Local docs preview `/docs/preview/<collection_id>` (no login) | ✅ |
 | Per-request (**Docs** tab) and per-collection descriptions | ✅ |
 | **Team workspace**: every signed-in user sees and edits every collection; only its creator can delete it or publish its docs (a people icon in the sidebar marks collections created by others) | ✅ |
-| **Activity dashboard** (header → Activity): workspace-wide feed grouped by day, filters by period / user / collection / activity / text, per-user summary, CSV export | ✅ |
+| **Workspaces** (switcher next to the logo): team workspaces visible to everyone signed in, which anyone can create or rename and only the creator can delete; plus a personal **My Workspace** per user. Collections, environments, history and the activity log are per workspace; Globals apply everywhere | ✅ |
+| **Activity dashboard** (header → Activity): feed of the current workspace grouped by day, filters by period / user / collection / activity / text, per-user summary, CSV export | ✅ |
 | **Activity Log**: `CREATE/UPDATE/DELETE_REQUEST`, `CREATE/RENAME/DELETE_FOLDER`, `IMPORT_COLLECTION`, `ADD_MOCK_SAMPLE`, publish/unpublish, create/rename/delete collection, sign-in/sign-out, with a diff summary (e.g. `method: GET → POST`, `url: … → …`) | ✅ |
 
 ## Interface
@@ -131,7 +133,7 @@ src/
 netlify/edge-functions/
   proxy.js              CORS proxy (POST /api/proxy, target in X-Curlion-* headers)
   mock.js               mock endpoint (reads with the service role key)
-supabase/migrations/    SQL schema + RLS (001 base, 002 docs/collaboration, 003 grants, 004 sign-in only, 005 invite message, 006 team workspace, 007 shared environments)
+supabase/migrations/    SQL schema + RLS (001 base, 002 docs/collaboration, 003 grants, 004 sign-in only, 005 invite message, 006 team workspace, 007 shared environments, 008 workspaces)
 tests/                  unit tests (node:test)
 ```
 

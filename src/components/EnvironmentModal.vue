@@ -1,18 +1,20 @@
 <script setup>
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { Eye, EyeOff, Globe, Lock, Plus, RotateCcw, Trash2, Unlock, Users } from 'lucide-vue-next'
 import Modal from './Modal.vue'
-import { canDeleteEnv, cloudEnabled, createEnvironment, deleteEnvironment, setActiveEnv, setCurrentValue, state, touchEnvironment } from '../store.js'
+import { canDeleteEnv, cloudEnabled, createEnvironment, deleteEnvironment, globalEnv, setActiveEnv, setCurrentValue, state, touchEnvironment, wsEnvironments } from '../store.js'
 import { uid } from '../lib/model.js'
 import { DYNAMIC_DESCRIPTIONS } from '../lib/variables.js'
 
 const emit = defineEmits(['close'])
-const selectedId = ref(state.activeEnvId || state.environments.find((e) => e.isGlobal)?.id)
+// Globals (every workspace) + the current workspace's environments
+const envList = computed(() => [globalEnv.value, ...wsEnvironments.value].filter(Boolean))
+const selectedId = ref(state.activeEnvId || globalEnv.value?.id)
 const env = ref(null)
 const revealed = ref({})
 watch(
-  [selectedId, () => state.environments.length],
-  () => (env.value = state.environments.find((e) => e.id === selectedId.value) || state.environments[0]),
+  [selectedId, () => envList.value.length],
+  () => (env.value = envList.value.find((e) => e.id === selectedId.value) || envList.value[0]),
   { immediate: true },
 )
 
@@ -38,7 +40,7 @@ function removeVar(i) {
 function remove() {
   if (!confirm(`Delete environment "${env.value.name}"?`)) return
   deleteEnvironment(env.value.id)
-  selectedId.value = state.environments[0]?.id
+  selectedId.value = envList.value[0]?.id
 }
 </script>
 
@@ -47,7 +49,7 @@ function remove() {
     <div class="flex min-h-96 text-sm">
       <aside class="w-52 shrink-0 space-y-0.5 border-r border-zinc-800 p-2">
         <button
-          v-for="e in state.environments"
+          v-for="e in envList"
           :key="e.id"
           class="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left"
           :class="e.id === env?.id ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-400 hover:bg-zinc-800/50'"

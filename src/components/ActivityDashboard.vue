@@ -1,10 +1,10 @@
-<!-- Workspace-wide activity log: who did what, when, in which collection. -->
+<!-- Activity log of the current workspace: who did what, when, in which collection. -->
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { Download, Loader2, RefreshCw, Search } from 'lucide-vue-next'
 import Modal from './Modal.vue'
 import UiSelect from './UiSelect.vue'
-import { fetchAllActivity, state } from '../store.js'
+import { currentWorkspace, fetchAllActivity, state, wsCollections } from '../store.js'
 import { ACTIONS, actionColor, describeLog } from '../lib/activity.js'
 
 const emit = defineEmits(['close'])
@@ -113,10 +113,10 @@ const groups = computed(() => {
 const time = (iso) => new Date(iso).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false })
 const collectionLabel = (l) => {
   if (!l.collection_id && !l.collection_name) return null
-  const live = state.collections.find((c) => c.id === l.collection_id)
+  const live = wsCollections.value.find((c) => c.id === l.collection_id)
   return live?.name || l.collection_name || 'deleted collection'
 }
-const isDeleted = (l) => !!l.collection_name && !state.collections.some((c) => c.id === l.collection_id)
+const isDeleted = (l) => !!l.collection_name && !wsCollections.value.some((c) => c.id === l.collection_id)
 
 // ---- CSV export ----------------------------------------------------------------
 function exportCsv() {
@@ -137,14 +137,15 @@ const periodOptions = PERIODS.map((p) => ({ value: p.id, label: p.label }))
 const userSelectOptions = computed(() => [{ value: '', label: 'All users' }, ...userOptions.value.map(([id, email]) => ({ value: id, label: email }))])
 const collectionOptions = computed(() => [
   { value: '', label: 'All collections' },
-  { value: '__account__', label: 'Sign-in / sign-out', class: 'text-zinc-400' },
-  ...state.collections.map((c) => ({ value: c.id, label: c.name })),
+  // account events (sign in / out, workspaces) are shown in team workspaces only
+  ...(currentWorkspace.value?.isPersonal ? [] : [{ value: '__account__', label: 'Account & workspaces', class: 'text-zinc-400' }]),
+  ...wsCollections.value.map((c) => ({ value: c.id, label: c.name })),
 ])
 const activitySelectOptions = [{ value: '', label: 'All activity' }, ...actionOptions.map(([id, label]) => ({ value: id, label }))]
 </script>
 
 <template>
-  <Modal title="Activity log" width="max-w-6xl" @close="emit('close')">
+  <Modal :title="`Activity log · ${currentWorkspace?.name || 'Workspace'}`" width="max-w-6xl" @close="emit('close')">
     <!-- Filters -->
     <div class="flex flex-wrap items-center gap-2 border-b border-zinc-800 px-4 py-3 text-xs">
       <UiSelect v-model="period" :options="periodOptions" class="w-36" />
