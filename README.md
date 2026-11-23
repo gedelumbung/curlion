@@ -30,7 +30,9 @@ netlify dev        # runs Vite + edge functions at /api/proxy and /mock/*
 
 ## Cloud setup (optional)
 
-1. Create a project on [Supabase](https://supabase.com), then run these in order in the SQL Editor:
+1. Create a project on [Supabase](https://supabase.com), then run [`supabase/schema.sql`](supabase/schema.sql) in the SQL Editor. That single file sets up the whole schema (tables, RLS, grants).
+
+   **Upgrading an existing database** that was set up from the migrations: run only the files in [`supabase/migrations/`](supabase/migrations/) that it has not applied yet, in order:
    - [`001_init.sql`](supabase/migrations/001_init.sql): tables + RLS
    - [`002_phase4_docs_collab.sql`](supabase/migrations/002_phase4_docs_collab.sql): published docs, collaboration RPCs
    - [`003_grants.sql`](supabase/migrations/003_grants.sql): table privileges for signed-in users (newer Supabase projects do not grant these automatically, which shows up as "permission denied for table collections")
@@ -39,6 +41,7 @@ netlify dev        # runs Vite + edge functions at /api/proxy and /mock/*
    - [`006_team_workspace.sql`](supabase/migrations/006_team_workspace.sql): every signed-in user sees and edits every collection; activity history survives collection deletion and includes sign-in/out
    - [`007_shared_environments.sql`](supabase/migrations/007_shared_environments.sql): environments (except Globals) shared with everyone; blanks existing secret values on the server
    - [`008_workspaces.sql`](supabase/migrations/008_workspaces.sql): workspaces (team + personal "My Workspace"); moves existing collections and environments into a "Team" workspace; activity log per workspace
+   - [`009_cleanup.sql`](supabase/migrations/009_cleanup.sql): drops the unused per-collection members table and its RPCs
 2. Copy `.env.example` to `.env` and fill in `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.
 3. In Supabase → Authentication → URL Configuration, set the Site URL to your site and add `https://<your-site>/**` (and `http://localhost:5173/**` for development) to Redirect URLs, so sign-in returns to the page it started from (e.g. a docs link).
 4. Lock down sign-in (accounts are created by an administrator; there is no sign-up or OAuth):
