@@ -119,7 +119,7 @@
           "name": "Which protocols does Curlion support?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "HTTP/REST, GraphQL (with a schema explorer), WebSocket, Socket.IO and gRPC. gRPC needs the Curlion Agent, which also lets any request reach localhost or a self-signed server."
+            "text": "HTTP/REST, GraphQL (with a schema explorer), WebSocket, Socket.IO and gRPC. gRPC needs the Curlion Agent, which also lets any request reach localhost or a self-signed server. Server-Sent Events (SSE) testing is on the roadmap."
           }
         },
         {
@@ -294,6 +294,16 @@
       .faq details[open] summary::after { transform: rotate(-135deg); margin-top: 4px; }
       .faq p { padding: 0 22px 20px; font-size: 16px; color: var(--text); }
 
+      /* ---------- roadmap ---------- */
+      .road { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 32px; align-items: center; max-width: 960px; margin-inline: auto; padding: 36px; border: 1px dashed #3a4152; border-radius: var(--radius); background: linear-gradient(180deg, var(--panel), var(--bg-soft)); }
+      .pill { display: inline-flex; align-items: center; gap: 7px; border: 1px solid rgba(230, 180, 80, 0.35); border-radius: 999px; padding: 3px 11px; background: rgba(230, 180, 80, 0.1); color: var(--accent); font-size: 12.5px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; }
+      .pill i { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+      .road h3 { margin-top: 16px; color: var(--strong); font-size: clamp(22px, 2.6vw, 28px); line-height: 1.2; letter-spacing: -0.02em; font-weight: 800; text-wrap: balance; }
+      .road p { margin-top: 12px; font-size: 16px; color: var(--text); }
+      .road figure { margin: 0; min-width: 0; }
+      .road pre { margin: 0; }
+      .road figcaption { margin-top: 10px; font-size: 13px; color: var(--muted); }
+
       /* ---------- final CTA / footer ---------- */
       .final { position: relative; margin-top: 120px; padding: 96px 0; text-align: center; overflow: hidden; border-top: 1px solid var(--line); background: var(--bg-soft); }
       .final::before { content: ''; position: absolute; inset: 0; z-index: 0; background: radial-gradient(600px 300px at 50% 0%, rgba(230, 180, 80, 0.14), transparent 70%); }
@@ -316,6 +326,7 @@
       @media (max-width: 1000px) {
         .grid { grid-template-columns: repeat(2, 1fr); }
         .alts { grid-template-columns: repeat(2, 1fr); }
+        .road { grid-template-columns: 1fr; padding: 28px; }
         .row, .row.flip { grid-template-columns: 1fr; gap: 32px; }
         .row.flip .copy { order: 0; }
         .steps { grid-template-columns: 1fr; }
@@ -330,6 +341,7 @@
         .row + .row { margin-top: 80px; }
         .head { margin-bottom: 40px; }
         .grid, .themes, .alts { grid-template-columns: 1fr; }
+        .road { padding: 22px; }
         .btn { padding: 13px 20px; }
         .final { padding: 72px 0; margin-top: 88px; }
         .foot-top, .foot-bottom { flex-direction: column; align-items: flex-start; }
@@ -618,6 +630,33 @@
         </div>
       </section>
 
+      <!-- ================= Roadmap ================= -->
+      <section id="roadmap">
+        <div class="wrap">
+          <div class="head">
+            <span class="kicker">Roadmap</span>
+            <h2>What’s coming next.</h2>
+            <p>Curlion is still growing. Here’s what is planned, so you know where it’s heading.</p>
+          </div>
+          <div class="road">
+            <div>
+              <span class="pill"><i></i> Planned</span>
+              <h3>Server-Sent Events (SSE) testing</h3>
+              <p>Connect to a <code>text/event-stream</code> endpoint and watch events arrive live in the message log, next to WebSocket and Socket.IO, with the same variables, auth and headers you already use.</p>
+            </div>
+            <figure>
+              <pre>GET {{baseUrl}}/prices/stream
+Accept: text/event-stream
+
+event: price.updated
+id: 42
+data: {"sku":"p_1042","price":84.9}</pre>
+              <figcaption>Illustration of an SSE stream. Not available yet.</figcaption>
+            </figure>
+          </div>
+        </div>
+      </section>
+
       <!-- ================= Get started ================= -->
       <section id="start">
         <div class="wrap">
@@ -680,7 +719,7 @@ VITE_SUPABASE_ANON_KEY</pre>
             </details>
             <details>
               <summary>Which protocols does Curlion support?</summary>
-              <p>HTTP/REST, GraphQL (with a schema explorer), WebSocket, Socket.IO and gRPC. gRPC needs the Curlion Agent, which also lets any request reach localhost or a self-signed server.</p>
+              <p>HTTP/REST, GraphQL (with a schema explorer), WebSocket, Socket.IO and gRPC. gRPC needs the Curlion Agent, which also lets any request reach localhost or a self-signed server. Server-Sent Events (SSE) testing is on the roadmap.</p>
             </details>
             <details>
               <summary>Is Curlion free?</summary>
