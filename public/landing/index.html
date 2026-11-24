@@ -132,6 +132,14 @@
         },
         {
           "@type": "Question",
+          "name": "Can I search, filter and compare API responses?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. You can search the response body with match case, whole word and regex options, and filter it with a JSONPath query (for JSON and NDJSON) or a text filter. Two responses can be compared side by side, or as a list of changed JSON paths, against an earlier response, a saved sample or another tab. Hovering the time, size and network icons next to a response shows a timing waterfall, request and response sizes and, in Agent mode, TLS and certificate details."
+          }
+        },
+        {
+          "@type": "Question",
           "name": "Is Curlion free?",
           "acceptedAnswer": {
             "@type": "Answer",
@@ -257,6 +265,8 @@
       .row { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 56px; align-items: center; }
       .row + .row { margin-top: 112px; }
       .row.flip .copy { order: 2; }
+      /* flipped rows give the picture the wider column: for screenshots with small text (above 1000px; below it rows are one column) */
+      @media (min-width: 1001px) { .row.flip.wide { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); } }
       .copy h3 { margin-top: 12px; text-wrap: balance; color: var(--strong); font-size: clamp(26px, 3.2vw, 36px); line-height: 1.15; letter-spacing: -0.025em; font-weight: 800; }
       .copy > p { margin-top: 16px; color: var(--text); }
       .copy ul { list-style: none; margin: 22px 0 0; padding: 0; display: grid; gap: 11px; }
@@ -470,6 +480,26 @@
               <h3>Tests without scripts</h3>
               <p>Check status, JSON paths, headers and response time with a few clicks, then run a whole collection and see what passed.</p>
             </article>
+            <article class="card">
+              <span class="ico"><svg viewBox="0 0 24 24"><path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9" /><path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5" /><circle cx="12" cy="12" r="2" /><path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5" /><path d="M19.1 4.9C23 8.8 23 15.1 19.1 19" /></svg></span>
+              <h3>Responses that stream</h3>
+              <p>Long or chunked responses appear live as they arrive. Stop whenever you like and keep what came in; NDJSON is parsed line by line.</p>
+            </article>
+            <article class="card">
+              <span class="ico"><svg viewBox="0 0 24 24"><path d="M3 6h18" /><path d="M7 12h10" /><path d="M10 18h4" /></svg></span>
+              <h3>Search &amp; filter</h3>
+              <p>Search the body with regex and case options, or filter it with JSONPath such as <code>$..items[?(@.price &gt; 10)]</code> to see only what matters.</p>
+            </article>
+            <article class="card">
+              <span class="ico"><svg viewBox="0 0 24 24"><circle cx="5" cy="6" r="3" /><path d="M12 6h5a2 2 0 0 1 2 2v7" /><path d="m15 9-3-3 3-3" /><circle cx="19" cy="18" r="3" /><path d="M12 18H7a2 2 0 0 1-2-2V9" /><path d="m9 15 3 3-3 3" /></svg></span>
+              <h3>Compare responses</h3>
+              <p>Diff two responses side by side, or list the JSON paths that changed. Compare with an earlier run, a saved sample or another tab.</p>
+            </article>
+            <article class="card">
+              <span class="ico"><svg viewBox="0 0 24 24"><path d="m12 14 4-4" /><path d="M3.34 19a10 10 0 1 1 17.32 0" /></svg></span>
+              <h3>See where the time went</h3>
+              <p>A timing waterfall, request and response sizes, and TLS and certificate details, one hover away from every response.</p>
+            </article>
           </div>
         </div>
       </section>
@@ -567,6 +597,57 @@
             <figure class="shot">
               <img src="img/overview.webp" width="1780" height="1450" loading="lazy"
                    alt="A collection overview listing three folders with their requests, plus buttons for new request, new folder, publish docs, activity log and export" />
+            </figure>
+          </div>
+
+          <div class="row flip wide">
+            <div class="copy">
+              <span class="kicker">Responses</span>
+              <h3>Find what matters in the response.</h3>
+              <p>Big payloads stop being a wall of text. Filter them down, search inside them, and watch long responses arrive as they stream in.</p>
+              <ul>
+                <li><b>JSONPath</b> filters for JSON and NDJSON, or a text filter for any response</li>
+                <li>Search with match case, whole word and regex, and jump between results</li>
+                <li>Streaming bodies shown live, with Stop that keeps what has arrived</li>
+              </ul>
+            </div>
+            <figure class="shot">
+              <img src="img/response-filter.webp" width="1624" height="1080" loading="lazy"
+                   alt="A response filtered with the JSONPath query $.data[?(@.status == &quot;paid&quot;)].customer.email, showing three email addresses with a search for acme.dev highlighted" />
+            </figure>
+          </div>
+
+          <div class="row">
+            <div class="copy">
+              <span class="kicker">Compare</span>
+              <h3>See exactly what changed.</h3>
+              <p>Did the deploy change the response? Put two responses next to each other and the differences stand out.</p>
+              <ul>
+                <li>Side-by-side body diff with the changed part of each line highlighted</li>
+                <li>A list of the JSON paths that were added, removed or changed</li>
+                <li>Compare with an earlier run, a saved sample or the response in another tab</li>
+              </ul>
+            </div>
+            <figure class="shot">
+              <img src="img/response-diff.webp" width="1816" height="1328" loading="lazy"
+                   alt="The Compare responses dialog showing two versions of an orders response side by side, with a changed status and total highlighted in green and a removed order in red" />
+            </figure>
+          </div>
+
+          <div class="row flip wide">
+            <div class="copy">
+              <span class="kicker">Response details</span>
+              <h3>Know where the time went.</h3>
+              <p>Hover the time, size or network icon next to a response to see what the request actually did.</p>
+              <ul>
+                <li>A timing waterfall from DNS and TLS to waiting and download</li>
+                <li>Request and response sizes, with headers and body split out</li>
+                <li>HTTP version, addresses and certificate details in Agent mode</li>
+              </ul>
+            </div>
+            <figure class="shot">
+              <img src="img/response-details.webp" width="1460" height="724" loading="lazy"
+                   alt="The Response Time popover with a waterfall of prepare, socket, DNS, TCP, SSL, waiting and download phases, where waiting takes 59.4 milliseconds" />
             </figure>
           </div>
 
@@ -712,6 +793,10 @@ VITE_SUPABASE_ANON_KEY</pre>
             <details>
               <summary>Which protocols does Curlion support?</summary>
               <p>HTTP/REST, GraphQL (with a schema explorer), WebSocket, Socket.IO, Server-Sent Events (SSE) and gRPC. SSE streams can send custom headers, auth and a request body, which a browser's EventSource cannot, and long or chunked HTTP responses (NDJSON included) show up live as they stream in. gRPC needs the Curlion Agent, which also lets any request reach localhost or a self-signed server.</p>
+            </details>
+            <details>
+              <summary>Can I search, filter and compare API responses?</summary>
+              <p>Yes. You can search the response body with match case, whole word and regex options, and filter it with a JSONPath query (for JSON and NDJSON) or a text filter. Two responses can be compared side by side, or as a list of changed JSON paths, against an earlier response, a saved sample or another tab. Hovering the time, size and network icons next to a response shows a timing waterfall, request and response sizes and, in Agent mode, TLS and certificate details.</p>
             </details>
             <details>
               <summary>Is Curlion free?</summary>
