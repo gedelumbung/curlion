@@ -159,6 +159,8 @@ export const baseTheme = EditorView.theme(
     '.cm-selectionMatch': { backgroundColor: 'color-mix(in srgb, var(--cm-selection) 40%, transparent) !important', boxShadow: 'inset 0 0 0 1px var(--cm-selection)', borderRadius: '2px' },
     '.cm-searchMatch.cm-selectionMatch': { backgroundColor: 'color-mix(in srgb, var(--color-orange-500) 25%, transparent) !important' },
     '.cm-searchMatch': { backgroundColor: 'color-mix(in srgb, var(--color-orange-500) 25%, transparent)' },
+    // the current match of the response search bar
+    '.cm-searchMatch-selected, .cm-searchMatch-selected .cm-searchMatch': { backgroundColor: 'color-mix(in srgb, var(--color-orange-500) 60%, transparent)', outline: '1px solid var(--color-orange-500)', borderRadius: '2px' },
   },
 )
 

@@ -1,6 +1,6 @@
 <script setup>
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
-import { AlertTriangle, Check, Copy, Download, FileDown, GitCompareArrows, Radio, Save, Square, WrapText, X } from 'lucide-vue-next'
+import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
+import { AlertTriangle, CaseSensitive, Check, ChevronDown, ChevronUp, Copy, Download, FileDown, GitCompareArrows, ListFilter, Radio, Regex, Save, Search, Square, WholeWord, WrapText, X } from 'lucide-vue-next'
 import CodeEditor from './CodeEditor.vue'
 import JsonTree from './JsonTree.vue'
 import ResponseMeta from './ResponseMeta.vue'
@@ -10,6 +10,7 @@ import { linkParts } from '../lib/links.js'
 import { copyText, formatSize, statusColor } from '../lib/ui.js'
 import { saveResponseFile } from '../lib/http.js'
 import { summarize } from '../lib/assertions.js'
+import { filterLines, queryJsonPath } from '../lib/jsonpath.js'
 import { indentString } from '../lib/settings.js'
 
 const res = activeResponse
@@ -31,6 +32,81 @@ const pretty = computed(() => {
   if (res.value.lines) return res.value.lines.map((l) => JSON.stringify(l, null, indentString())).join('\n') // one pretty block per line
   return res.value.body
 })
+
+// ---- filter: JSONPath on JSON (and NDJSON lines), or matching lines of any text -----------
+const filterOpen = ref(false)
+const filterQuery = ref('')
+const filterMode = ref('jsonpath') // jsonpath | text
+const filterInput = ref(null)
+function openFilter() {
+  if (!filterOpen.value) filterMode.value = doc.value !== undefined ? 'jsonpath' : 'text'
+  filterOpen.value = true
+  tab.value = 'body'
+  nextTick(() => filterInput.value?.focus())
+}
+function closeFilter() {
+  filterOpen.value = false
+}
+const filtered = computed(() => {
+  const q = filterQuery.value.trim()
+  if (!filterOpen.value || !q || !res.value || res.value.binary) return null
+  try {
+    if (filterMode.value === 'jsonpath') {
+      if (doc.value === undefined) return { error: 'The response is not JSON: use the Text filter.' }
+      const { nodes, definite } = queryJsonPath(doc.value, q)
+      // one exact path shows its value; anything else shows the list of matches
+      const value = definite ? nodes[0]?.value : nodes.map((n) => n.value)
+      const empty = !nodes.length
+      return { value, empty, label: `${nodes.length} match${nodes.length === 1 ? '' : 'es'}`, text: empty ? '' : JSON.stringify(value, null, indentString()), raw: empty ? '' : JSON.stringify(value), lang: 'json', paths: nodes.map((n) => n.path) }
+    }
+    const { lines, total } = filterLines(view.value === 'raw' ? res.value.body : pretty.value, q)
+    return { empty: !lines.length, label: `${lines.length} of ${total} lines`, text: lines.join('\n'), raw: lines.join('\n'), lang: 'text' }
+  } catch (e) {
+    return { error: e.message }
+  }
+})
+const active = computed(() => (filtered.value && !filtered.value.error ? filtered.value : null))
+/** What the body pane shows: the filter result, or the whole body. */
+const shownText = computed(() => (active.value ? (view.value === 'raw' ? active.value.raw : active.value.text) : view.value === 'raw' ? res.value.body : pretty.value))
+const shownLang = computed(() => (view.value === 'raw' ? 'text' : active.value ? active.value.lang : lang.value))
+const treeValue = computed(() => (active.value && filterMode.value === 'jsonpath' ? active.value.value : doc.value))
+
+// ---- search inside the body (highlights in the editor; Enter / Shift+Enter to move) -------------
+const searchOpen = ref(false)
+const searchText = ref('')
+const searchOpts = reactive({ caseSensitive: false, wholeWord: false, regexp: false })
+const matches = ref({ count: 0, index: -1, error: null, capped: false })
+const editor = ref(null)
+const searchInput = ref(null)
+function openSearch() {
+  if (!res.value || res.value.binary) return
+  searchOpen.value = true
+  tab.value = 'body'
+  if (view.value === 'tree') view.value = 'pretty' // the tree has no text to search
+  nextTick(() => {
+    searchInput.value?.focus()
+    searchInput.value?.select()
+  })
+}
+function closeSearch() {
+  searchOpen.value = false
+}
+const runSearch = () => editor.value?.search(searchOpen.value && searchText.value ? { text: searchText.value, ...searchOpts } : null)
+watch([searchText, searchOpen, () => ({ ...searchOpts }), editor], runSearch)
+const step = (dir) => editor.value?.step(dir)
+const searchLabel = computed(() => {
+  const m = matches.value
+  if (!searchText.value) return ''
+  if (m.error) return m.error
+  return m.count ? `${m.index + 1} of ${m.count}${m.capped ? '+' : ''}` : 'No results'
+})
+/** Ctrl/⌘+F anywhere in the response pane opens the search bar instead of the browser's. */
+function onKeydown(e) {
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'f' && res.value && !res.value.binary) {
+    e.preventDefault()
+    openSearch()
+  }
+}
 
 // ---- live view while the body streams in ---------------------------------------------
 const live = activeStream
@@ -78,7 +154,7 @@ async function saveAgain() {
 }
 
 async function copyBody() {
-  await copyText(view.value === 'raw' ? res.value.body : pretty.value)
+  await copyText(view.value === 'tree' ? JSON.stringify(treeValue.value, null, indentString()) : shownText.value)
   toast('Response copied', 'success', 1500)
 }
 
@@ -95,7 +171,7 @@ function saveAsSample() {
 </script>
 
 <template>
-  <section class="flex min-h-0 flex-col border-t border-zinc-800">
+  <section class="flex min-h-0 flex-col border-t border-zinc-800" @keydown="onKeydown">
     <!-- Status line -->
     <div class="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2 text-sm">
       <span class="font-medium text-zinc-300">Response</span>
@@ -173,14 +249,61 @@ function saveAsSample() {
             <button v-for="v in ['pretty', 'tree', 'raw']" :key="v" class="rounded px-2 py-0.5 capitalize" :class="view === v ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'" :disabled="v === 'tree' && doc === undefined" @click="view = v">
               {{ v }}
             </button>
-            <button class="ml-auto rounded p-1 hover:bg-zinc-800" :class="wrap ? 'text-orange-400' : 'text-zinc-500'" title="Wrap lines" @click="wrap = !wrap"><WrapText :size="14" /></button>
-            <button class="rounded p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-100" title="Copy" @click="copyBody"><Copy :size="14" /></button>
+            <button class="ml-auto rounded p-1 hover:bg-zinc-800" :class="filterOpen ? 'text-orange-400' : 'text-zinc-500 hover:text-zinc-100'" title="Filter (JSONPath or text)" @click="filterOpen ? closeFilter() : openFilter()"><ListFilter :size="14" /></button>
+            <button class="rounded p-1 hover:bg-zinc-800" :class="searchOpen ? 'text-orange-400' : 'text-zinc-500 hover:text-zinc-100'" title="Search (Ctrl/⌘+F)" @click="searchOpen ? closeSearch() : openSearch()"><Search :size="14" /></button>
+            <button class="rounded p-1 hover:bg-zinc-800" :class="wrap ? 'text-orange-400' : 'text-zinc-500'" title="Wrap lines" @click="wrap = !wrap"><WrapText :size="14" /></button>
+            <button class="rounded p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-100" :title="active ? 'Copy the filtered result' : 'Copy'" @click="copyBody"><Copy :size="14" /></button>
           </div>
-          <div v-if="view === 'tree' && doc !== undefined" class="flex-1 overflow-auto px-4 pb-4">
-            <JsonTree :value="doc" />
+
+          <!-- Filter -->
+          <div v-if="filterOpen" class="flex flex-wrap items-center gap-2 px-4 pb-2 text-xs">
+            <span class="flex rounded border border-zinc-700 p-0.5">
+              <button v-for="m in [{ id: 'jsonpath', label: 'JSONPath' }, { id: 'text', label: 'Text' }]" :key="m.id" class="rounded px-2 py-0.5" :class="filterMode === m.id ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'" :disabled="m.id === 'jsonpath' && doc === undefined" :title="m.id === 'jsonpath' ? (doc === undefined ? 'The response is not JSON' : 'Select parts of the JSON') : 'Keep only lines that contain the text, or match /regex/'" @click="filterMode = m.id">{{ m.label }}</button>
+            </span>
+            <input
+              ref="filterInput"
+              v-model="filterQuery"
+              class="min-w-40 flex-1 rounded border bg-zinc-900 px-2 py-1 font-mono text-[12px] outline-none"
+              :class="filtered?.error ? 'border-red-800 focus:border-red-600' : 'border-zinc-700 focus:border-zinc-500'"
+              :placeholder="filterMode === 'jsonpath' ? '$.data[*].id   ·   $..items[?(@.price > 10)]   ·   data.user.email' : 'text, or /regex/i'"
+              spellcheck="false"
+              @keydown.esc="closeFilter"
+            />
+            <span v-if="filtered?.error" class="max-w-72 truncate text-red-400" :title="filtered.error">{{ filtered.error }}</span>
+            <span v-else-if="filtered" class="text-zinc-400">{{ filtered.label }}</span>
+            <button class="rounded p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-100" title="Close filter (Esc)" @click="closeFilter"><X :size="13" /></button>
+          </div>
+
+          <!-- Search -->
+          <div v-if="searchOpen" class="flex flex-wrap items-center gap-1 px-4 pb-2 text-xs">
+            <div class="flex min-w-40 flex-1 items-center rounded border bg-zinc-900 pr-1 focus-within:border-zinc-500" :class="matches.error ? 'border-red-800' : 'border-zinc-700'">
+              <Search :size="13" class="ml-2 shrink-0 text-zinc-500" />
+              <input
+                ref="searchInput"
+                v-model="searchText"
+                class="min-w-0 flex-1 bg-transparent px-2 py-1 font-mono text-[12px] outline-none"
+                placeholder="Search the body"
+                spellcheck="false"
+                @keydown.enter.exact.prevent="step(1)"
+                @keydown.shift.enter.prevent="step(-1)"
+                @keydown.esc="closeSearch"
+              />
+              <button v-for="o in [{ key: 'caseSensitive', icon: CaseSensitive, title: 'Match case' }, { key: 'wholeWord', icon: WholeWord, title: 'Whole word' }, { key: 'regexp', icon: Regex, title: 'Regular expression' }]" :key="o.key" class="rounded p-0.5" :class="searchOpts[o.key] ? 'bg-orange-500/20 text-orange-400' : 'text-zinc-500 hover:text-zinc-200'" :title="o.title" @click="searchOpts[o.key] = !searchOpts[o.key]">
+                <component :is="o.icon" :size="15" />
+              </button>
+            </div>
+            <span class="min-w-16 px-1 text-center" :class="matches.error || (searchText && !matches.count) ? 'text-red-400' : 'text-zinc-400'">{{ view === 'tree' ? 'Pretty or Raw only' : searchLabel }}</span>
+            <button class="rounded p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-100 disabled:opacity-40" title="Previous (Shift+Enter)" :disabled="!matches.count" @click="step(-1)"><ChevronUp :size="14" /></button>
+            <button class="rounded p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-100 disabled:opacity-40" title="Next (Enter)" :disabled="!matches.count" @click="step(1)"><ChevronDown :size="14" /></button>
+            <button class="rounded p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-100" title="Close search (Esc)" @click="closeSearch"><X :size="13" /></button>
+          </div>
+
+          <p v-if="active?.empty" class="px-4 py-8 text-center text-sm text-zinc-500">Nothing matches the filter.</p>
+          <div v-else-if="view === 'tree' && doc !== undefined" class="flex-1 overflow-auto px-4 pb-4">
+            <JsonTree :value="treeValue" />
           </div>
           <div v-else class="min-h-0 flex-1">
-            <CodeEditor :model-value="view === 'raw' ? res.body : pretty" :language="view === 'raw' ? 'text' : lang" readonly :variables="false" links :wrap="wrap || view === 'raw'" />
+            <CodeEditor ref="editor" :model-value="shownText" :language="shownLang" readonly :variables="false" links find-key :wrap="wrap || view === 'raw'" @find="openSearch" @matches="matches = $event" />
           </div>
         </div>
       </template>

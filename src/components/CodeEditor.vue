@@ -1,8 +1,9 @@
 <!-- Multi-line code editor (CodeMirror 6) for request bodies, responses and snippets. -->
 <script setup>
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { Compartment, EditorState } from '@codemirror/state'
+import { Compartment, EditorState, Prec, StateEffect, StateField } from '@codemirror/state'
 import {
+  Decoration,
   crosshairCursor,
   drawSelection,
   dropCursor,
@@ -17,7 +18,7 @@ import {
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
 import { bracketMatching, foldGutter, foldKeymap, indentOnInput, indentUnit, syntaxHighlighting } from '@codemirror/language'
 import { closeBrackets, closeBracketsKeymap, completionKeymap } from '@codemirror/autocomplete'
-import { highlightSelectionMatches, searchKeymap } from '@codemirror/search'
+import { SearchQuery, highlightSelectionMatches, searchKeymap } from '@codemirror/search'
 import { json } from '@codemirror/lang-json'
 import { xml } from '@codemirror/lang-xml'
 import { html } from '@codemirror/lang-html'
@@ -33,8 +34,9 @@ const props = defineProps({
   variables: { type: Boolean, default: true },
   wrap: { type: Boolean, default: false },
   links: { type: Boolean, default: false }, // make http(s) URLs clickable (opens a new tab)
+  findKey: { type: Boolean, default: false }, // Ctrl/⌘+F emits 'find' (the parent shows its own search bar)
 })
-const emit = defineEmits(['update:modelValue'])
+const emit = defineEmits(['update:modelValue', 'find', 'matches']) // matches: { count, index, error }
 
 const el = ref(null)
 let view = null
@@ -67,6 +69,61 @@ const setup = [
   keymap.of([...defaultKeymap, ...searchKeymap, ...historyKeymap, ...foldKeymap, ...completionKeymap]),
 ]
 
+// ---- search driven by the parent (search(spec), step(dir)) ----------------------------------
+// CodeMirror only highlights search matches while its own panel is open, so matches are
+// drawn here as decorations.
+const MAX_MATCHES = 10_000
+const setMatches = StateEffect.define()
+const matchMark = Decoration.mark({ class: 'cm-searchMatch' })
+const currentMark = Decoration.mark({ class: 'cm-searchMatch cm-searchMatch-selected' })
+const matchField = StateField.define({
+  create: () => Decoration.none,
+  update(deco, tr) {
+    deco = deco.map(tr.changes)
+    for (const e of tr.effects) if (e.is(setMatches)) deco = Decoration.set(e.value.ranges.map((r, i) => (i === e.value.current ? currentMark : matchMark).range(r.from, r.to)))
+    return deco
+  },
+  provide: (f) => EditorView.decorations.from(f),
+})
+let searchSpec = null
+let ranges = []
+let current = -1
+
+function applyMatches(scroll) {
+  if (!view) return
+  const effects = [setMatches.of({ ranges, current })]
+  if (scroll && current >= 0) effects.push(EditorView.scrollIntoView(ranges[current].from, { y: 'center' }))
+  view.dispatch({ effects })
+  emit('matches', { count: ranges.length, index: current, capped: ranges.length >= MAX_MATCHES, error: null })
+}
+
+/** Highlight every match of spec = { text, caseSensitive, regexp, wholeWord }; empty text clears. */
+function search(spec, { keepIndex = false, scroll = true } = {}) {
+  searchSpec = spec?.text ? { ...spec } : null
+  const prev = current
+  ranges = []
+  current = -1
+  if (!view) return
+  if (!searchSpec) return applyMatches(false)
+  const q = new SearchQuery({ search: spec.text, caseSensitive: !!spec.caseSensitive, regexp: !!spec.regexp, wholeWord: !!spec.wholeWord, literal: !spec.regexp })
+  if (!q.valid) {
+    view.dispatch({ effects: setMatches.of({ ranges: [], current: -1 }) })
+    emit('matches', { count: 0, index: -1, error: 'Invalid regular expression' })
+    return
+  }
+  const cur = q.getCursor(view.state)
+  for (let r = cur.next(); !r.done && ranges.length < MAX_MATCHES; r = cur.next()) if (r.value.to > r.value.from) ranges.push({ from: r.value.from, to: r.value.to })
+  current = ranges.length ? (keepIndex && prev >= 0 ? Math.min(prev, ranges.length - 1) : 0) : -1
+  applyMatches(scroll)
+}
+/** Go to the next (1) or previous (-1) match. */
+function step(dir) {
+  if (!ranges.length) return
+  current = (current + dir + ranges.length) % ranges.length
+  applyMatches(true)
+}
+defineExpose({ search, step })
+
 const langExt = (l) => (l === 'json' ? json() : l === 'xml' ? xml() : l === 'html' ? html() : [])
 
 onMounted(() => {
@@ -86,6 +143,8 @@ onMounted(() => {
         wrapConf.of(props.wrap ? EditorView.lineWrapping : []),
         EditorState.readOnly.of(props.readonly),
         props.links ? urlLinks() : [],
+        matchField,
+        props.findKey ? Prec.highest(keymap.of([{ key: 'Mod-f', run: () => (emit('find'), true) }])) : [],
         props.variables ? [variableHighlighter(() => scope.value), variableCompletion(() => scope.value), variableClick(openVarPopover)] : [],
         EditorView.updateListener.of((u) => {
           if (u.docChanged && !props.readonly) emit('update:modelValue', u.state.doc.toString())
@@ -100,6 +159,7 @@ watch(
   (val) => {
     if (view && val !== view.state.doc.toString()) {
       view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: val ?? '' } })
+      if (searchSpec) search(searchSpec, { keepIndex: true, scroll: false }) // new content: find again
     }
   },
 )

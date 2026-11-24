@@ -905,3 +905,64 @@ test('metrics: Resource Timing with and without Timing-Allow-Origin, agent detai
   assert.equal(agent.network.certCN, '*.example.com')
   assert.match(buildMetrics({ ...base, mode: 'agent' }, null, 'agent').note, /too old/)
 })
+
+// ---- JSONPath filter -------------------------------------------------------------------
+import { filterLines, JsonPathError, parseJsonPath, queryJsonPath } from '../src/lib/jsonpath.js'
+
+const STORE = {
+  store: {
+    book: [
+      { category: 'reference', author: 'Nigel Rees', title: 'Sayings', price: 8.95 },
+      { category: 'fiction', author: 'Evelyn Waugh', title: 'Sword', price: 12.99, tags: ['war'] },
+      { category: 'fiction', author: 'Herman Melville', title: 'Moby Dick', isbn: '0-553', price: 8.99 },
+      { category: 'fiction', author: 'J. R. R. Tolkien', title: 'The Lord', isbn: '0-395', price: 22.99, tags: ['epic', 'ring'] },
+    ],
+    bicycle: { color: 'red', price: 399, 'odd key': true },
+  },
+  expensive: 10,
+}
+
+test('JSONPath: names, indexes, wildcards, recursion, unions, slices', () => {
+  const v = (q) => queryJsonPath(STORE, q).nodes.map((n) => n.value)
+  const p = (q) => queryJsonPath(STORE, q).nodes.map((n) => n.path)
+  assert.deepEqual(v('$.store.book[*].author'), ['Nigel Rees', 'Evelyn Waugh', 'Herman Melville', 'J. R. R. Tolkien'])
+  assert.deepEqual(v('$..author').length, 4)
+  assert.deepEqual(v('store.bicycle.color'), ['red']) // no leading $
+  assert.deepEqual(v("$.store.bicycle['odd key']"), [true])
+  assert.deepEqual(v('$.store.book[-1].title'), ['The Lord'])
+  assert.deepEqual(v('$.store.book[0,2].title'), ['Sayings', 'Moby Dick'])
+  assert.deepEqual(v('$.store.book[1:3].title'), ['Sword', 'Moby Dick'])
+  assert.deepEqual(v('$.store.book[::-2].title'), ['The Lord', 'Sword'])
+  assert.deepEqual(v('$.store.book[:2].price'), [8.95, 12.99])
+  assert.deepEqual(v('$.store.book.length'), [4])
+  assert.deepEqual(v('$..price').length, 5)
+  assert.deepEqual(p('$.store.book[0].title'), ['$.store.book[0].title'])
+  assert.equal(parseJsonPath('$.store.book[0].title').definite, true)
+  assert.equal(parseJsonPath('$.store.book[*]').definite, false)
+})
+
+test('JSONPath: filters', () => {
+  const v = (q) => queryJsonPath(STORE, q).nodes.map((n) => n.value.title)
+  assert.deepEqual(v('$.store.book[?(@.price < 10)]'), ['Sayings', 'Moby Dick'])
+  assert.deepEqual(v('$.store.book[?(@.isbn)]'), ['Moby Dick', 'The Lord'])
+  assert.deepEqual(v('$.store.book[?(!@.isbn)]'), ['Sayings', 'Sword'])
+  assert.deepEqual(v('$.store.book[?@.price > $.expensive && @.category == "fiction"]'), ['Sword', 'The Lord'])
+  assert.deepEqual(v("$.store.book[?(@.author =~ /tolkien/i || @.price == 8.95)]"), ['Sayings', 'The Lord'])
+  assert.deepEqual(v('$.store.book[?(length(@.tags) >= 2)]'), ['The Lord'])
+  assert.deepEqual(v('$.store.book[?(@.tags.length == 1)]'), ['Sword'])
+  assert.deepEqual(v("$.store.book[?(@.category != 'fiction')]"), ['Sayings'])
+  assert.deepEqual(v('$.store.book[?(@.price > "5")]'), []) // number vs string never compares
+  assert.deepEqual(queryJsonPath([{ a: 1 }, { a: 2 }], '$[?(@.a == 2)].a').nodes.map((n) => n.value), [2])
+})
+
+test('JSONPath errors and line filter', () => {
+  assert.throws(() => parseJsonPath('$.store.book[?(@.price <)]'), JsonPathError)
+  assert.throws(() => parseJsonPath('$.store[0'), /Expected "\]"/)
+  assert.throws(() => parseJsonPath('   '), /Empty query/)
+  assert.deepEqual(filterLines('alpha\nBeta\ngamma', 'BET'), { lines: ['Beta'], total: 3 })
+  assert.deepEqual(filterLines('a1\nb2\nc3', '/^[ab]\\d$/').lines, ['a1', 'b2'])
+  assert.throws(() => filterLines('x', '/(/'), /Invalid regex/)
+  // error positions count the query as typed (without the $. added in front)
+  assert.throws(() => parseJsonPath('headers['), /at position 9/)
+  assert.throws(() => parseJsonPath('$.headers['), /at position 11/)
+})
