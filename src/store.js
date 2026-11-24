@@ -61,6 +61,7 @@ export const state = reactive({
   conns: {}, // requestId -> WebSocket / Socket.IO connection state and message log
   pending: {}, // requestId -> true while that request is in flight
   streams: {}, // requestId -> { status, statusText, headers, contentType, text, bytes, startedAt } while a text body streams in
+  responseLog: {}, // requestId -> earlier responses this session, newest first (for Compare)
   errors: {}, // requestId -> error message of its last send
   history: [],
   user: null,
@@ -1137,6 +1138,7 @@ export async function send({ download = false } = {}) {
     if (protocol === 'grpc') {
       const { resolved } = await prepareRequest(req)
       const res = await invokeGrpc(req, resolved, controller.signal)
+      rememberResponse(id, state.responses[id])
       state.responses[id] = res
       addHistory(req, { method: 'GRPC', url: `${resolved.url}${res.grpcPath}` }, res)
       return
@@ -1150,6 +1152,7 @@ export async function send({ download = false } = {}) {
     if (controllers.has(id) && controllers.get(id) !== controller) return
     const prev = state.responses[id]?.downloadUrl
     if (prev && prev !== res.downloadUrl) URL.revokeObjectURL(prev)
+    rememberResponse(id, state.responses[id])
     state.responses[id] = res
     if (res.saved === 'saved') toast(`Saved ${res.fileName}`, 'success', 2500)
     else if (res.saved === 'downloaded') toast(`Downloading ${res.fileName}…`, 'success', 2500)
@@ -1167,6 +1170,16 @@ export async function send({ download = false } = {}) {
       delete state.streams[id]
     } else if (!controllers.has(id)) delete state.streams[id] // stopped with Cancel
   }
+}
+
+const RESPONSE_LOG = 5
+/** Keep a replaced response so it can be compared with newer ones (text responses, this session only). */
+function rememberResponse(id, res) {
+  if (!res || res.binary) return
+  const { status, statusText, time, size, headers, contentType, body, json, lines, at, grpc, aborted } = res
+  const log = (state.responseLog[id] ||= [])
+  log.unshift({ status, statusText, time, size, headers, contentType, body, json, lines, at: at || Date.now(), grpc, aborted })
+  log.splice(RESPONSE_LOG)
 }
 
 /**
@@ -1602,6 +1615,7 @@ async function clearLocalData() {
     conns: {},
     pending: {},
     streams: {},
+    responseLog: {},
     errors: {},
   })
 }

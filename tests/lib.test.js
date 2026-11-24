@@ -811,3 +811,60 @@ test('tests and JSON paths work on NDJSON lines', () => {
   assert.equal(checkTest(newTest({ source: 'json', property: 'length', op: 'eq', expected: '2' }), res).ok, true)
   assert.equal(checkTest(newTest({ source: 'json', property: '[1].id', op: 'eq', expected: '2' }), res).ok, true)
 })
+
+// ---- Response diff -------------------------------------------------------------------
+import { diffLines, diffStats, inlineChange, jsonChanges, sideBySide, sortKeysDeep } from '../src/lib/diff.js'
+
+test('diffLines: minimal edit script that rebuilds both sides', () => {
+  const rebuild = (ops, side) => ops.filter((o) => o.type === 'equal' || o.type === (side === 'a' ? 'del' : 'add')).map((o) => o.text)
+  const cases = [
+    ['a\nb\nc', 'a\nb\nc'],
+    ['', 'x\ny'],
+    ['x\ny', ''],
+    ['a\nb\nc\nd', 'a\nc\nd\ne'],
+    ['1\n2\n3\n4\n5\n6', '0\n1\n3\n4\nX\n6\n7'],
+  ]
+  for (const [a, b] of cases) {
+    const { ops, truncated } = diffLines(a, b)
+    assert.equal(truncated, false)
+    assert.deepEqual(rebuild(ops, 'a'), a ? a.split('\n') : [])
+    assert.deepEqual(rebuild(ops, 'b'), b ? b.split('\n') : [])
+  }
+  assert.deepEqual(diffStats(diffLines('a\nb\nc\nd', 'a\nc\nd\ne').ops), { added: 1, removed: 1 })
+  assert.deepEqual(diffStats(diffLines('1\n2\n3\n4\n5\n6', '0\n1\n3\n4\nX\n6\n7').ops), { added: 3, removed: 2 }) // shortest script
+  // random check against both rebuilds
+  for (let t = 0; t < 200; t++) {
+    const gen = () => Array.from({ length: Math.floor(Math.random() * 12) }, () => 'abc'[Math.floor(Math.random() * 3)]).join('\n')
+    const a = gen()
+    const b = gen()
+    const { ops } = diffLines(a, b)
+    assert.deepEqual(rebuild(ops, 'a'), a ? a.split('\n') : [])
+    assert.deepEqual(rebuild(ops, 'b'), b ? b.split('\n') : [])
+  }
+  const big = diffLines(Array.from({ length: 300 }, (_, i) => 'a' + i).join('\n'), Array.from({ length: 300 }, (_, i) => 'b' + i).join('\n'), { maxEdits: 50 })
+  assert.equal(big.truncated, true)
+})
+
+test('sideBySide pairs changes and collapses unchanged runs; inlineChange', () => {
+  const a = Array.from({ length: 20 }, (_, i) => `line ${i}`)
+  const b = [...a]
+  b[10] = 'line ten'
+  const rows = sideBySide(diffLines(a.join('\n'), b.join('\n')).ops, { context: 2 })
+  assert.deepEqual(rows.map((r) => (r.gap ? `gap ${r.gap}` : `${r.left?.type}/${r.right?.type}`)), ['gap 8', 'equal/equal', 'equal/equal', 'del/add', 'equal/equal', 'equal/equal', 'gap 7'])
+  assert.deepEqual(rows[3].left.n, 11)
+  assert.deepEqual(inlineChange('"id": 41,', '"id": 42,', 'right'), { pre: '"id": 4', mid: '2', post: ',' })
+})
+
+test('jsonChanges and sortKeysDeep', () => {
+  const a = { id: 1, user: { name: 'A', roles: ['x', 'y'] }, gone: true, 'odd key': 1 }
+  const b = { id: 2, user: { name: 'A', roles: ['x'], email: 'e' }, 'odd key': '1' }
+  assert.deepEqual(jsonChanges(a, b), [
+    { path: '$.id', type: 'changed', from: 1, to: 2 },
+    { path: '$.user.roles[1]', type: 'removed', from: 'y' },
+    { path: '$.user.email', type: 'added', to: 'e' },
+    { path: '$.gone', type: 'removed', from: true },
+    { path: '$["odd key"]', type: 'changed', from: 1, to: '1' },
+  ])
+  assert.deepEqual(jsonChanges({ a: [1] }, { a: [1] }), [])
+  assert.equal(JSON.stringify(sortKeysDeep({ b: 1, a: { d: 1, c: [{ z: 1, y: 2 }] } })), '{"a":{"c":[{"y":2,"z":1}],"d":1},"b":1}')
+})

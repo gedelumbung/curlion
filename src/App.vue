@@ -18,6 +18,7 @@ import LoginScreen from './components/LoginScreen.vue'
 import CollectionModal from './components/CollectionModal.vue'
 import ContainerSettingsModal from './components/ContainerSettingsModal.vue'
 import RunnerModal from './components/RunnerModal.vue'
+import DiffModal from './components/DiffModal.vue'
 import ActivityDashboard from './components/ActivityDashboard.vue'
 import AgentModal from './components/AgentModal.vue'
 import AboutModal from './components/AboutModal.vue'
@@ -28,7 +29,7 @@ import VarPopover from './components/VarPopover.vue'
 import WorkspaceSwitcher from './components/WorkspaceSwitcher.vue'
 import { activeOverview, activeRequest, addNewRequest, checkAgent, cloudEnabled, init, openTabs, saveNow, send, setActiveEnv, setMode, signOut, state, wsEnvironments } from './store.js'
 
-const modal = ref(null) // env | import | code | collection | container | runner | activity | agent | about | settings
+const modal = ref(null) // env | import | code | collection | container | runner | diff | activity | agent | about | settings
 const collectionCtx = ref(null) // { col, tab }
 function openCollection(ctx) {
   collectionCtx.value = ctx
@@ -262,7 +263,7 @@ const syncLabel = {
             @dblclick="resetPane('split')"
           ></div>
           <MessageLog v-if="['ws', 'socketio', 'sse'].includes(activeRequest.protocol)" :key="'log' + activeRequest.id" class="min-h-0 flex-1" />
-          <ResponseViewer v-else :key="activeRequest.id" class="min-h-0 flex-1" />
+          <ResponseViewer v-else :key="activeRequest.id" class="min-h-0 flex-1" @compare="modal = 'diff'" />
         </div>
         <CollectionOverview v-else-if="activeOverview" :key="activeOverview.id" :collection="activeOverview" @collection="openCollection" @settings="openContainer" @run="openRunner" />
         <div v-else class="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center text-zinc-500">
@@ -299,6 +300,7 @@ const syncLabel = {
       @open="(col, node) => openContainer({ col, node })"
       @close="modal = null"
     />
+    <DiffModal v-if="modal === 'diff'" @close="modal = null" />
     <RunnerModal v-if="modal === 'runner'" :collection="runnerCtx.col" :folder="runnerCtx.node" @close="modal = null" />
     <CollectionModal v-if="modal === 'collection'" :collection="collectionCtx.col" :initial-tab="collectionCtx.tab" @close="modal = null" />
 

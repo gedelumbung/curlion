@@ -63,6 +63,7 @@ netlify dev        # runs Vite + edge functions at /api/proxy and /mock/*
 | Body: none, form-data (text/file), x-www-form-urlencoded, raw (JSON/Text/XML/HTML) | ✅ |
 | Response: colored status, time (ms), size, headers, Pretty/Tree/Raw, Copy | ✅ |
 | **Streaming responses**: text bodies are read as they arrive and shown live (status, elapsed time, size, line count, auto-scroll), so chunked and long-running responses (LLM streams, logs, exports) are visible before they finish. **Stop** keeps what has arrived (marked *stopped · partial*). **NDJSON / JSON Lines / JSON text sequences** are parsed line by line: Pretty shows each line formatted, Tree shows them as an array, and tests and Post-Response paths use that array (`length`, `[0].id`). The time tooltip splits first byte and streaming | ✅ |
+| **Compare responses** (response pane → *Compare*): pick any two of this response, the last 5 earlier responses of the request (kept for the session), its saved Samples, or the response in another open tab. *Changes* lists added / removed / changed JSON paths; *Body* is a side-by-side line diff (Myers) with the changed part of each line highlighted, unchanged runs collapsed and an option to ignore JSON key order; *Headers* compares sorted headers, optionally ignoring ones that change every time (date, etag, request ids…). NDJSON compares line by line | ✅ |
 | Send and Download + automatic binary response detection (`Content-Disposition`, pdf/zip/images) | ✅ |
 | **GraphQL** requests: Query and Variables editors, schema explorer from introspection (click "Use" to generate an operation), sent via Direct / Proxy / Agent; Postman GraphQL bodies import and export | ✅ |
 | **WebSocket**: connect, send text/JSON, saved messages, live message log; subprotocols; through the Agent with custom headers, auth, localhost and self-signed TLS | ✅ |
@@ -141,6 +142,7 @@ src/
     cm.js               CodeMirror extensions (variable highlighting & autocomplete)
     activity.js         tree diff → activity log entries
     assertions.js       no-code response tests
+    diff.js             response diff: line diff, side-by-side rows, JSON path changes
     publish.js          docs snapshot + secret sanitizing, slug
     theme.js            light/dark theme
   components/           UI (Sidebar, RequestEditor, ResponseViewer, modals)

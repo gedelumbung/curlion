@@ -1,6 +1,6 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
-import { AlertTriangle, Check, Copy, Download, FileDown, Radio, Save, Square, WrapText, X } from 'lucide-vue-next'
+import { AlertTriangle, Check, Copy, Download, FileDown, GitCompareArrows, Radio, Save, Square, WrapText, X } from 'lucide-vue-next'
 import CodeEditor from './CodeEditor.vue'
 import JsonTree from './JsonTree.vue'
 import { activeError, activeLoading, activeRequest, activeResponse, activeStream, addSampleNow, cancel, isHistoryId, state, toast } from '../store.js'
@@ -12,6 +12,7 @@ import { summarize } from '../lib/assertions.js'
 import { indentString } from '../lib/settings.js'
 
 const res = activeResponse
+const emit = defineEmits(['compare'])
 const tab = ref('body')
 const view = ref('pretty') // pretty | tree | raw
 const wrap = ref(false)
@@ -117,6 +118,9 @@ function saveAsSample() {
         <span v-if="res.aborted" class="rounded bg-amber-500/10 px-1.5 py-0.5 text-[11px] text-amber-400" title="Stopped before the response finished: the body is what had arrived">stopped · partial</span>
         <span class="font-mono text-xs text-zinc-400" :title="res.ttfb !== undefined && res.time - res.ttfb > 50 ? `First byte after ${res.ttfb} ms, then ${res.time - res.ttfb} ms streaming the body` : undefined">{{ res.time }} ms</span>
         <span class="font-mono text-xs text-zinc-400">{{ formatSize(res.size) }}</span>
+        <button v-if="!res.binary" class="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100" title="Compare with an earlier response, a sample or another tab" @click="emit('compare')">
+          <GitCompareArrows :size="13" /> Compare
+        </button>
         <button v-if="!isHistoryId(activeRequest?.id) && !res.grpc" class="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100" title="Save as Sample / Mock" @click="saveAsSample">
           <Save :size="13" /> Save as Sample
         </button>
