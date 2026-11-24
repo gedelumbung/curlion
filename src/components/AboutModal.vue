@@ -20,7 +20,8 @@ const emit = defineEmits(['close'])
       </p>
       <p class="border-t border-zinc-800 pt-4 text-center text-xs text-zinc-500">
         Made with <kbd class="rounded border border-zinc-700 px-1 font-mono text-[11px] text-zinc-400">Ctrl+C</kbd>,
-        <kbd class="rounded border border-zinc-700 px-1 font-mono text-[11px] text-zinc-400">Ctrl+V</kbd>, and aggressive prompting.
+        <kbd class="rounded border border-zinc-700 px-1 font-mono text-[11px] text-zinc-400">Ctrl+V</kbd>, and aggressive prompting by
+        <a href="https://gedelumbung.com" target="_blank" rel="noopener noreferrer" class="text-zinc-300 underline decoration-zinc-700 underline-offset-[3px] transition-colors hover:text-orange-400 hover:decoration-orange-400">Gede Lumbung</a>.
       </p>
     </div>
   </Modal>
