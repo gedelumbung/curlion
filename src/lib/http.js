@@ -260,18 +260,76 @@ export async function openStream(resolved, opts = {}) {
   return { ...responseMeta(res, relayed), body: res.body, text: () => res.text() }
 }
 
+const NDJSON_TYPE = /(x-)?ndjson|jsonl|json-seq|jsonlines/i
+
+/**
+ * Newline-delimited JSON (NDJSON / JSON Lines / JSON text sequences): the parsed lines, or
+ * undefined when the body is not that. Bodies without such a Content-Type count when they
+ * have at least two lines and every line is JSON (common for streamed APIs).
+ */
+export function parseJsonLines(text, contentType = '') {
+  const declared = NDJSON_TYPE.test(contentType)
+  if (!declared && !/\n/.test(text.trim())) return undefined
+  const lines = text.split(/\r?\n/).map((l) => l.replace(/^\x1e/, '').trim()).filter(Boolean) // \x1e: RFC 7464 record separator
+  if (!lines.length || (!declared && lines.length < 2)) return undefined
+  const out = []
+  for (const l of lines) {
+    try {
+      out.push(JSON.parse(l))
+    } catch {
+      return undefined
+    }
+  }
+  return out
+}
+
+/**
+ * Read a text body as it arrives. onProgress({ text, bytes }) is called at most every
+ * PROGRESS_MS while data comes in. Stopping (signal) keeps what arrived: aborted is true.
+ */
+const PROGRESS_MS = 80
+async function readText(res, { onProgress, signal } = {}) {
+  if (!res.body) return { text: await res.text(), bytes: 0, aborted: false }
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  let text = ''
+  let bytes = 0
+  let last = 0
+  let aborted = false
+  try {
+    for (;;) {
+      const { value, done } = await reader.read()
+      if (done) break
+      bytes += value.byteLength
+      text += decoder.decode(value, { stream: true })
+      const now = performance.now()
+      if (onProgress && now - last >= PROGRESS_MS) {
+        last = now
+        onProgress({ text, bytes })
+      }
+    }
+    text += decoder.decode()
+  } catch (err) {
+    if (err.name !== 'AbortError' && !signal?.aborted) throw err
+    aborted = true
+    text += decoder.decode()
+  }
+  return { text, bytes, aborted }
+}
+
 /**
  * Send a resolved request.
  * @param resolved output of resolveRequest()
  * @param opts { mode: 'direct'|'proxy'|'agent', agentPort, download: boolean, signal,
- *   saveBinary: false to skip saving binary responses as files (Collection Runner) }
+ *   saveBinary: false to skip saving binary responses as files (Collection Runner),
+ *   onProgress: ({ status, statusText, headers, contentType, text, bytes }) => void, called
+ *   while a text body streams in; with it, stopping (signal) after the headers arrived
+ *   returns what was received so far, marked `aborted` }
  */
 export async function sendRequest(resolved, opts = {}) {
-  const { download = false, saveBinary = true } = opts
+  const { download = false, saveBinary = true, onProgress, signal } = opts
   const { res, relayed, started } = await fetchResolved(resolved, opts)
-
-  const blob = await res.blob()
-  const time = Math.round(performance.now() - started)
+  const ttfb = Math.round(performance.now() - started) // headers received
 
   const { status, statusText, headers: responseHeaders } = responseMeta(res, relayed)
   const hdrs = new Headers(responseHeaders.map((h) => [h.key, h.value]))
@@ -279,17 +337,22 @@ export async function sendRequest(resolved, opts = {}) {
   const result = {
     status,
     statusText,
-    time,
-    size: blob.size,
+    time: 0,
+    ttfb,
+    size: 0,
     headers: responseHeaders,
     contentType: hdrs.get('content-type') || '',
     body: '',
     json: undefined,
+    lines: undefined, // parsed NDJSON / JSON Lines
     binary: false,
     fileName: null,
   }
 
   if (download || isBinaryResponse(hdrs)) {
+    const blob = await res.blob()
+    result.time = Math.round(performance.now() - started)
+    result.size = blob.size
     result.binary = true
     result.fileName = withExtension(filenameFrom(hdrs, resolved.url), result.contentType)
     if (!saveBinary) return result
@@ -301,9 +364,18 @@ export async function sendRequest(resolved, opts = {}) {
     return result
   }
 
-  result.body = await blob.text()
+  const meta = { status, statusText, headers: responseHeaders, contentType: result.contentType }
+  onProgress?.({ ...meta, text: '', bytes: 0 })
+  const read = await readText(res, { signal, onProgress: onProgress && ((p) => onProgress({ ...meta, ...p })) })
+  if (read.aborted && !onProgress) throw new DOMException('Aborted', 'AbortError')
+  result.time = Math.round(performance.now() - started)
+  result.body = read.text
+  result.size = read.bytes
+  if (read.aborted) result.aborted = true
   try {
     result.json = JSON.parse(result.body)
-  } catch {}
+  } catch {
+    result.lines = parseJsonLines(result.body, result.contentType)
+  }
   return result
 }

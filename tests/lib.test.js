@@ -755,3 +755,59 @@ test('SSE: Accept header added, snippets, OpenAPI event-stream operations', asyn
   assert.equal(collection.items[0].protocol, 'sse')
   assert.deepEqual(collection.items[0].sse, { reconnect: false, lastEventId: '' })
 })
+
+// ---- Streaming HTTP responses (chunked / NDJSON) -------------------------------------
+import { parseJsonLines, sendRequest } from '../src/lib/http.js'
+
+test('parseJsonLines: declared NDJSON / JSON Lines / json-seq, detected multi-line JSON, plain text', () => {
+  assert.deepEqual(parseJsonLines('{"a":1}\n{"a":2}\n', 'application/x-ndjson'), [{ a: 1 }, { a: 2 }])
+  assert.deepEqual(parseJsonLines('{"only":1}', 'application/jsonl'), [{ only: 1 }])
+  assert.deepEqual(parseJsonLines('\x1e{"a":1}\n\x1e[2]\n', 'application/json-seq'), [{ a: 1 }, [2]])
+  assert.deepEqual(parseJsonLines('1\r\n"two"\r\n', 'text/plain'), [1, 'two'])
+  assert.equal(parseJsonLines('hello\nworld', 'text/plain'), undefined)
+  assert.equal(parseJsonLines('{"a":1}', 'text/plain'), undefined) // one line without a declared type
+})
+
+test('sendRequest streams text bodies: progress, NDJSON lines, stop keeps the partial body', async () => {
+  const server = http.createServer((req, res) => {
+    res.writeHead(200, { 'Content-Type': 'application/x-ndjson' })
+    let i = 0
+    const t = setInterval(() => {
+      res.write(JSON.stringify({ i: ++i }) + '\n')
+      if (i === 4 && req.url === '/done') {
+        clearInterval(t)
+        res.end()
+      }
+    }, 100)
+    res.on('close', () => clearInterval(t))
+  })
+  await new Promise((r) => server.listen(0, '127.0.0.1', r))
+  const url = `http://127.0.0.1:${server.address().port}`
+  try {
+    const seen = []
+    const done = await sendRequest({ method: 'GET', url: url + '/done', headers: [], body: null }, { onProgress: (p) => seen.push(p.bytes) })
+    assert.deepEqual(done.lines, [{ i: 1 }, { i: 2 }, { i: 3 }, { i: 4 }])
+    assert.equal(done.json, undefined)
+    assert.ok(seen.length >= 3 && seen[0] === 0 && seen.at(-1) > 0, `progress: ${seen}`) // updates while the body arrived
+    assert.ok(done.time - done.ttfb >= 250)
+
+    const ctl = new AbortController()
+    const partial = sendRequest({ method: 'GET', url: url + '/forever', headers: [], body: null }, { signal: ctl.signal, onProgress: (p) => p.bytes > 20 && ctl.abort() })
+    const r = await partial
+    assert.equal(r.aborted, true)
+    assert.ok(r.lines.length >= 2)
+
+    // without onProgress (Collection Runner), stopping is an AbortError as before
+    const ctl2 = new AbortController()
+    setTimeout(() => ctl2.abort(), 150)
+    await assert.rejects(sendRequest({ method: 'GET', url: url + '/forever', headers: [], body: null }, { signal: ctl2.signal }), { name: 'AbortError' })
+  } finally {
+    server.close()
+  }
+})
+
+test('tests and JSON paths work on NDJSON lines', () => {
+  const res = { status: 200, time: 1, headers: [], body: '{"id":1}\n{"id":2}\n', json: undefined, lines: [{ id: 1 }, { id: 2 }] }
+  assert.equal(checkTest(newTest({ source: 'json', property: 'length', op: 'eq', expected: '2' }), res).ok, true)
+  assert.equal(checkTest(newTest({ source: 'json', property: '[1].id', op: 'eq', expected: '2' }), res).ok, true)
+})

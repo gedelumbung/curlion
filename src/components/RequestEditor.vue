@@ -210,7 +210,8 @@ function addRule() {
   req.value.extract.push({ id: uid(), path: '', variable: '', enabled: true })
 }
 function preview(rule) {
-  const json = activeResponse.value?.json
+  const r = activeResponse.value
+  const json = r?.json !== undefined ? r.json : r?.lines // NDJSON: lines as an array
   if (json === undefined || !rule.path) return null
   const v = getByPath(json, rule.path)
   if (v === undefined) return { ok: false, text: 'not found in last response' }

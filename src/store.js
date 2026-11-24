@@ -60,6 +60,7 @@ export const state = reactive({
   responses: {}, // requestId -> response (kept per request for this session)
   conns: {}, // requestId -> WebSocket / Socket.IO connection state and message log
   pending: {}, // requestId -> true while that request is in flight
+  streams: {}, // requestId -> { status, statusText, headers, contentType, text, bytes, startedAt } while a text body streams in
   errors: {}, // requestId -> error message of its last send
   history: [],
   user: null,
@@ -1140,7 +1141,13 @@ export async function send({ download = false } = {}) {
       addHistory(req, { method: 'GRPC', url: `${resolved.url}${res.grpcPath}` }, res)
       return
     }
-    const { res, resolved } = await executeHttp(req, { download, signal: controller.signal })
+    const startedAt = Date.now()
+    const onProgress = (p) => {
+      if (controllers.get(id) === controller) state.streams[id] = { ...p, startedAt }
+    }
+    const { res, resolved } = await executeHttp(req, { download, signal: controller.signal, onProgress })
+    // a newer send of this request took over: its result wins (a stopped one keeps what arrived)
+    if (controllers.has(id) && controllers.get(id) !== controller) return
     const prev = state.responses[id]?.downloadUrl
     if (prev && prev !== res.downloadUrl) URL.revokeObjectURL(prev)
     state.responses[id] = res
@@ -1148,7 +1155,7 @@ export async function send({ download = false } = {}) {
     else if (res.saved === 'downloaded') toast(`Downloading ${res.fileName}…`, 'success', 2500)
     addHistory(req, resolved, res)
   } catch (err) {
-    if (err.name !== 'AbortError') {
+    if (err.name !== 'AbortError' && (!controllers.has(id) || controllers.get(id) === controller)) {
       state.errors[id] = err.message
       delete state.responses[id]
     }
@@ -1157,7 +1164,8 @@ export async function send({ download = false } = {}) {
     if (controllers.get(id) === controller) {
       controllers.delete(id)
       delete state.pending[id]
-    }
+      delete state.streams[id]
+    } else if (!controllers.has(id)) delete state.streams[id] // stopped with Cancel
   }
 }
 
@@ -1167,7 +1175,7 @@ export async function send({ download = false } = {}) {
  * tests and Post-Response extraction.
  * @returns {{ res, resolved }} res also carries .tests and .extracted
  */
-export async function executeHttp(req, { collectionId, download = false, saveBinary = true, signal } = {}) {
+export async function executeHttp(req, { collectionId, download = false, saveBinary = true, signal, onProgress } = {}) {
   let { resolved, oauth } = await prepareRequest(req, { collectionId })
   if (protocolOf(req) === 'graphql') {
     try {
@@ -1179,7 +1187,7 @@ export async function executeHttp(req, { collectionId, download = false, saveBin
   if (state.mode === 'proxy' && /^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])/i.test(resolved.url)) {
     throw new Error('localhost cannot be reached through the cloud proxy. Use Agent mode (runs requests from your computer), or Direct mode with CORS enabled on your local server.')
   }
-  const opts = { mode: state.mode, agentPort: state.agent.port, download, saveBinary, signal }
+  const opts = { mode: state.mode, agentPort: state.agent.port, download, saveBinary, signal, onProgress }
   let res = await sendRequest(resolved, opts)
   // OAuth 2.0: the token may have been revoked or expired early; get a fresh one and retry once
   if (res.status === 401 && canRetryOAuth(oauth)) {
@@ -1425,22 +1433,25 @@ export function clearConnLog(id) {
   if (state.conns[id]) state.conns[id].log = []
 }
 
+/** Stop a request. A response that was streaming in keeps what arrived so far. */
 export function cancel(id = activeRequest.value?.id) {
   controllers.get(id)?.abort()
   controllers.delete(id)
   delete state.pending[id]
 }
+export const activeStream = computed(() => (activeRequest.value ? state.streams[activeRequest.value.id] || null : null))
 
 /** Post-response extraction: JSON path -> environment variable. */
 function runExtract(req, res) {
   const results = []
   for (const rule of req.extract || []) {
     if (rule.enabled === false || !rule.path || !rule.variable) continue
-    if (res.json === undefined) {
+    const doc = res.json !== undefined ? res.json : res.lines // NDJSON: the lines as an array
+    if (doc === undefined) {
       results.push({ variable: rule.variable, ok: false, message: 'Response is not JSON' })
       continue
     }
-    const value = getByPath(res.json, rule.path)
+    const value = getByPath(doc, rule.path)
     if (value === undefined) {
       results.push({ variable: rule.variable, ok: false, message: `Path "${rule.path}" not found` })
       continue
@@ -1590,6 +1601,7 @@ async function clearLocalData() {
     responses: {},
     conns: {},
     pending: {},
+    streams: {},
     errors: {},
   })
 }

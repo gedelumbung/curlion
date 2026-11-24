@@ -56,8 +56,10 @@ export function actualValue(t, res) {
       return { found: !!h, value: h?.value }
     }
     case 'json': {
-      if (res.json === undefined) return { found: false, value: undefined, notJson: true }
-      const v = t.property?.trim() ? getByPath(res.json, t.property) : res.json
+      // NDJSON / JSON Lines: the parsed lines as an array, e.g. [0].id or length
+      const doc = res.json !== undefined ? res.json : res.lines
+      if (doc === undefined) return { found: false, value: undefined, notJson: true }
+      const v = t.property?.trim() ? getByPath(doc, t.property) : doc
       return { found: v !== undefined, value: v }
     }
     default:

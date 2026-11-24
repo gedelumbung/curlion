@@ -1,9 +1,9 @@
 <script setup>
-import { computed, ref, watch } from 'vue'
-import { AlertTriangle, Check, Copy, Download, FileDown, Save, WrapText, X } from 'lucide-vue-next'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { AlertTriangle, Check, Copy, Download, FileDown, Radio, Save, Square, WrapText, X } from 'lucide-vue-next'
 import CodeEditor from './CodeEditor.vue'
 import JsonTree from './JsonTree.vue'
-import { activeError, activeLoading, activeRequest, activeResponse, addSampleNow, isHistoryId, state, toast } from '../store.js'
+import { activeError, activeLoading, activeRequest, activeResponse, activeStream, addSampleNow, cancel, isHistoryId, state, toast } from '../store.js'
 import { kv, newSample } from '../lib/model.js'
 import { linkParts } from '../lib/links.js'
 import { copyText, formatSize, statusColor } from '../lib/ui.js'
@@ -16,15 +16,52 @@ const tab = ref('body')
 const view = ref('pretty') // pretty | tree | raw
 const wrap = ref(false)
 
+/** JSON body, or the parsed lines of an NDJSON / JSON Lines body (shown as an array in Tree). */
+const doc = computed(() => (res.value?.json !== undefined ? res.value.json : res.value?.lines))
 const lang = computed(() => {
   const ct = res.value?.contentType || ''
-  if (res.value?.json !== undefined) return 'json'
+  if (doc.value !== undefined) return 'json'
   return /xml/.test(ct) ? 'xml' : /html/.test(ct) ? 'html' : 'text'
 })
 const pretty = computed(() => {
   if (!res.value) return ''
   if (res.value.json !== undefined) return JSON.stringify(res.value.json, null, indentString())
+  if (res.value.lines) return res.value.lines.map((l) => JSON.stringify(l, null, indentString())).join('\n') // one pretty block per line
   return res.value.body
+})
+
+// ---- live view while the body streams in ---------------------------------------------
+const live = activeStream
+const LIVE_TAIL = 200_000 // characters kept on screen; the full body is shown when it completes
+const liveText = computed(() => {
+  const t = live.value?.text || ''
+  return t.length > LIVE_TAIL ? `… (${formatSize(t.length - LIVE_TAIL)} earlier not shown while streaming)\n` + t.slice(-LIVE_TAIL) : t
+})
+const liveLines = computed(() => {
+  const t = live.value?.text || ''
+  let n = 0
+  for (let i = t.indexOf('\n'); i !== -1; i = t.indexOf('\n', i + 1)) n++
+  return n
+})
+const now = ref(Date.now())
+let clock = null
+watch(
+  () => !!live.value,
+  (on) => {
+    clearInterval(clock)
+    if (on) clock = setInterval(() => (now.value = Date.now()), 100)
+  },
+  { immediate: true },
+)
+onBeforeUnmount(() => clearInterval(clock))
+const elapsed = computed(() => (live.value ? Math.max(0, (now.value - live.value.startedAt) / 1000).toFixed(1) : '0.0'))
+// follow the end of the stream unless the user scrolled up
+const livePre = ref(null)
+watch(liveText, async () => {
+  const el = livePre.value
+  const atBottom = !el || el.scrollHeight - el.scrollTop - el.clientHeight < 40
+  await nextTick()
+  if (atBottom && livePre.value) livePre.value.scrollTop = livePre.value.scrollHeight
 })
 
 const wrapVar = (name) => '{' + '{' + name + '}' + '}'
@@ -60,7 +97,15 @@ function saveAsSample() {
     <!-- Status line -->
     <div class="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2 text-sm">
       <span class="font-medium text-zinc-300">Response</span>
-      <template v-if="res">
+      <template v-if="activeLoading && live">
+        <span class="inline-flex items-center gap-1.5 text-xs text-sky-400"><Radio :size="13" class="animate-pulse" /> Receiving…</span>
+        <span class="ml-auto font-mono text-xs" :class="statusColor(live.status)">{{ live.status }} {{ live.statusText }}</span>
+        <span class="font-mono text-xs text-zinc-400">{{ elapsed }} s</span>
+        <span class="font-mono text-xs text-zinc-400">{{ formatSize(live.bytes) }}</span>
+        <span v-if="liveLines > 1" class="font-mono text-xs text-zinc-400">{{ liveLines }} lines</span>
+        <button class="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100" title="Stop and keep what has arrived" @click="cancel()"><Square :size="12" /> Stop</button>
+      </template>
+      <template v-else-if="res">
         <nav class="flex gap-1 text-xs">
           <button v-for="t in tabs" :key="t" class="rounded px-2 py-1 capitalize" :class="tab === t ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'" @click="tab = t">
             {{ t }}<span v-if="t === 'headers'" class="ml-1 text-zinc-500">{{ res.headers.length }}</span>
@@ -68,7 +113,9 @@ function saveAsSample() {
           </button>
         </nav>
         <span class="ml-auto font-mono text-xs" :class="statusColor(res.status, res.grpc)" :title="res.grpc && res.message ? res.message : undefined">{{ res.status }} {{ res.statusText }}</span>
-        <span class="font-mono text-xs text-zinc-400">{{ res.time }} ms</span>
+        <span v-if="res.lines" class="rounded bg-zinc-800 px-1.5 py-0.5 font-mono text-[11px] text-zinc-400" title="Newline-delimited JSON: one JSON value per line">NDJSON · {{ res.lines.length }} lines</span>
+        <span v-if="res.aborted" class="rounded bg-amber-500/10 px-1.5 py-0.5 text-[11px] text-amber-400" title="Stopped before the response finished: the body is what had arrived">stopped · partial</span>
+        <span class="font-mono text-xs text-zinc-400" :title="res.ttfb !== undefined && res.time - res.ttfb > 50 ? `First byte after ${res.ttfb} ms, then ${res.time - res.ttfb} ms streaming the body` : undefined">{{ res.time }} ms</span>
         <span class="font-mono text-xs text-zinc-400">{{ formatSize(res.size) }}</span>
         <button v-if="!isHistoryId(activeRequest?.id) && !res.grpc" class="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100" title="Save as Sample / Mock" @click="saveAsSample">
           <Save :size="13" /> Save as Sample
@@ -85,7 +132,11 @@ function saveAsSample() {
     </div>
 
     <div class="min-h-0 flex-1 overflow-auto">
-      <div v-if="activeLoading" class="flex h-full items-center justify-center text-sm text-zinc-500">Sending request…</div>
+      <div v-if="activeLoading && live" class="flex h-full min-h-0 flex-col">
+        <p v-if="/event-stream/i.test(live.contentType)" class="px-4 pb-1 text-xs text-zinc-500">This is an event stream. Set the request type to <b>SSE</b> to see parsed events.</p>
+        <pre ref="livePre" class="min-h-0 flex-1 overflow-auto px-4 pb-4 font-mono text-[12px] whitespace-pre-wrap break-all text-zinc-300">{{ liveText }}<span class="animate-pulse text-sky-400">▍</span></pre>
+      </div>
+      <div v-else-if="activeLoading" class="flex h-full items-center justify-center text-sm text-zinc-500">Sending request…</div>
       <div v-else-if="activeError" class="m-4 rounded border border-red-900 bg-red-950/40 p-3 text-sm text-red-300">
         <p class="font-medium">Could not get a response</p>
         <p class="mt-1 text-red-300/80">{{ activeError }}</p>
@@ -111,14 +162,14 @@ function saveAsSample() {
         </div>
         <div v-else class="flex h-full flex-col">
           <div class="flex items-center gap-1 px-4 pb-1 text-xs">
-            <button v-for="v in ['pretty', 'tree', 'raw']" :key="v" class="rounded px-2 py-0.5 capitalize" :class="view === v ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'" :disabled="v === 'tree' && res.json === undefined" @click="view = v">
+            <button v-for="v in ['pretty', 'tree', 'raw']" :key="v" class="rounded px-2 py-0.5 capitalize" :class="view === v ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'" :disabled="v === 'tree' && doc === undefined" @click="view = v">
               {{ v }}
             </button>
             <button class="ml-auto rounded p-1 hover:bg-zinc-800" :class="wrap ? 'text-orange-400' : 'text-zinc-500'" title="Wrap lines" @click="wrap = !wrap"><WrapText :size="14" /></button>
             <button class="rounded p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-100" title="Copy" @click="copyBody"><Copy :size="14" /></button>
           </div>
-          <div v-if="view === 'tree' && res.json !== undefined" class="flex-1 overflow-auto px-4 pb-4">
-            <JsonTree :value="res.json" />
+          <div v-if="view === 'tree' && doc !== undefined" class="flex-1 overflow-auto px-4 pb-4">
+            <JsonTree :value="doc" />
           </div>
           <div v-else class="min-h-0 flex-1">
             <CodeEditor :model-value="view === 'raw' ? res.body : pretty" :language="view === 'raw' ? 'text' : lang" readonly :variables="false" links :wrap="wrap || view === 'raw'" />

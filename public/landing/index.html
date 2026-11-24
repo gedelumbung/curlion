@@ -61,6 +61,7 @@
         "OAuth 2.0: authorization code with PKCE and client credentials, with automatic token refresh",
         "Team workspaces with shared environments",
         "Response tests without scripts and a Collection Runner",
+        "Streaming responses shown live, with NDJSON / JSON Lines parsed line by line",
         "Code snippets for cURL, JavaScript, PHP, Go and Python",
         "Published read-only API documentation",
         "Eight themes, dark and light"
@@ -123,7 +124,7 @@
           "name": "Which protocols does Curlion support?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "HTTP/REST, GraphQL (with a schema explorer), WebSocket, Socket.IO, Server-Sent Events (SSE) and gRPC. SSE streams can send custom headers, auth and a request body, which a browser's EventSource cannot. gRPC needs the Curlion Agent, which also lets any request reach localhost or a self-signed server."
+            "text": "HTTP/REST, GraphQL (with a schema explorer), WebSocket, Socket.IO, Server-Sent Events (SSE) and gRPC. SSE streams can send custom headers, auth and a request body, which a browser's EventSource cannot, and long or chunked HTTP responses (NDJSON included) show up live as they stream in. gRPC needs the Curlion Agent, which also lets any request reach localhost or a self-signed server."
           }
         },
         {
@@ -707,7 +708,7 @@ VITE_SUPABASE_ANON_KEY</pre>
             </details>
             <details>
               <summary>Which protocols does Curlion support?</summary>
-              <p>HTTP/REST, GraphQL (with a schema explorer), WebSocket, Socket.IO, Server-Sent Events (SSE) and gRPC. SSE streams can send custom headers, auth and a request body, which a browser's EventSource cannot. gRPC needs the Curlion Agent, which also lets any request reach localhost or a self-signed server.</p>
+              <p>HTTP/REST, GraphQL (with a schema explorer), WebSocket, Socket.IO, Server-Sent Events (SSE) and gRPC. SSE streams can send custom headers, auth and a request body, which a browser's EventSource cannot, and long or chunked HTTP responses (NDJSON included) show up live as they stream in. gRPC needs the Curlion Agent, which also lets any request reach localhost or a self-signed server.</p>
             </details>
             <details>
               <summary>Is Curlion free?</summary>
