@@ -56,6 +56,7 @@ export function applyInheritance(req, ancestors = []) {
 }
 
 /**
+ * opts: maskSecrets / keepDynamic (see interpolate), oauthToken: access token for OAuth 2.0 auth
  * @returns {{ method, url, headers: {key,value}[], body: null | {mode, raw?, contentType?, fields?} }}
  */
 export function resolveRequest(req, scope, opts = {}) {
@@ -79,7 +80,11 @@ export function resolveRequest(req, scope, opts = {}) {
     if (!hasHeader(headers, 'authorization')) headers.push({ key: 'Authorization', value: `Basic ${b64}` })
   } else if (a.type === 'apikey' && a.apikey?.key) {
     if (a.apikey.in === 'query') url = appendQuery(url, I(a.apikey.key), I(a.apikey.value))
-    else headers.push({ key: I(a.apikey.key), value: I(a.apikey.value) })
+    else headers.push({ key: I(a.apikey.key), value: I(a.apikey.value) })  } else if (a.type === 'oauth2') {
+    // the token is fetched and kept by the store (opts.oauthToken); snippets and docs show a placeholder
+    const prefix = (a.oauth2?.headerPrefix ?? 'Bearer').trim()
+    const token = opts.oauthToken || '<access token>'
+    if (!hasHeader(headers, 'authorization')) headers.push({ key: 'Authorization', value: prefix ? `${prefix} ${token}` : token })
   }
 
   // GraphQL: always a JSON POST of { query, variables }. Variables are spliced in as text

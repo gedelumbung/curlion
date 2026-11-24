@@ -4,6 +4,7 @@ import { computed, watch } from 'vue'
 import { ArrowUpRight } from 'lucide-vue-next'
 import VarInput from './VarInput.vue'
 import UiSelect from './UiSelect.vue'
+import OAuth2Editor from './OAuth2Editor.vue'
 import { AUTH_DEFAULTS, newAuth } from '../lib/model.js'
 import { effectiveAuth } from '../lib/resolve.js'
 
@@ -28,7 +29,7 @@ watch(
 )
 const auth = computed(() => props.holder.auth)
 
-const TYPE_LABEL = { inherit: 'Inherit from parent', none: 'No Auth', bearer: 'Bearer Token', basic: 'Basic Auth', apikey: 'API Key' }
+const TYPE_LABEL = { inherit: 'Inherit from parent', none: 'No Auth', bearer: 'Bearer Token', basic: 'Basic Auth', apikey: 'API Key', oauth2: 'OAuth 2.0' }
 const types = computed(() => Object.entries(TYPE_LABEL).filter(([v]) => v !== 'inherit' || props.kind !== 'collection').map(([value, label]) => ({ value, label })))
 const APIKEY_IN = [
   { value: 'header', label: 'Header' },
@@ -79,6 +80,7 @@ const noun = { request: 'request', folder: 'folder', collection: 'collection' }
         <label class="block text-xs text-zinc-500">Add to</label>
         <UiSelect v-model="auth.apikey.in" :options="APIKEY_IN" class="w-36" />
       </template>
+      <OAuth2Editor v-if="auth.type === 'oauth2' && auth.oauth2" :auth="auth" :owner-key="holder.id" />
       <p v-if="kind !== 'request' && !['inherit', 'none'].includes(auth.type)" class="text-xs text-zinc-600">
         Used by every request in this {{ noun[kind] }} whose auth is set to "Inherit from parent".
       </p>

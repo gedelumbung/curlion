@@ -16,6 +16,7 @@ export function sanitizeRequest(req) {
     if (r.auth.bearer) r.auth.bearer.token = hide(r.auth.bearer.token, '<token>')
     if (r.auth.basic) r.auth.basic.password = hide(r.auth.basic.password, '<password>')
     if (r.auth.apikey) r.auth.apikey.value = hide(r.auth.apikey.value, '<api-key>')
+    if (r.auth.oauth2) r.auth.oauth2.clientSecret = hide(r.auth.oauth2.clientSecret, '<client-secret>')
   }
   delete r.authSourceId
   for (const h of r.headers || []) if (SENSITIVE_HEADER.test(h.key)) h.value = hide(h.value, '<redacted>')

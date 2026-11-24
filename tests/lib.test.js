@@ -410,3 +410,59 @@ test('docs snapshot shows inherited auth and headers on each request', () => {
   assert.deepEqual(r.headers.map((h) => [h.key, h.value]), [['X-Api-Key', '<redacted>']])
   assert.equal(snap.items[0].auth, undefined)
 })
+
+// ---- OAuth 2.0 --------------------------------------------------------------------
+import { authorizeUrl, isExpired, parseRedirect, parseTokenResponse, pkcePair, refreshParams, tokenRequest, authorizationCodeParams } from '../src/lib/oauth.js'
+import { createHash } from 'node:crypto'
+
+test('OAuth: PKCE S256 challenge and authorize URL', async () => {
+  const p = await pkcePair()
+  assert.equal(p.method, 'S256')
+  assert.match(p.verifier, /^[A-Za-z0-9_-]{43,128}$/)
+  assert.equal(p.challenge, createHash('sha256').update(p.verifier).digest('base64url'))
+  const u = new URL(authorizeUrl({ authUrl: 'https://id.test/authorize?prompt=login', clientId: 'cid', scope: 'read write', audience: 'api' }, { state: 's1', redirectUri: 'https://app.test/oauth-callback.html', pkce: p }))
+  assert.equal(u.searchParams.get('prompt'), 'login')
+  assert.equal(u.searchParams.get('response_type'), 'code')
+  assert.equal(u.searchParams.get('scope'), 'read write')
+  assert.equal(u.searchParams.get('code_challenge'), p.challenge)
+  assert.equal(u.searchParams.get('redirect_uri'), 'https://app.test/oauth-callback.html')
+})
+
+test('OAuth: redirect parsing, token request client auth, token parsing and expiry', () => {
+  assert.deepEqual(parseRedirect('https://a.test/cb?code=xyz&state=s1'), { code: 'xyz', state: 's1', error: null })
+  assert.equal(parseRedirect('https://a.test/cb?error=access_denied&error_description=No').error, 'access_denied: No')
+  assert.equal(parseRedirect('https://a.test/cb#code=h&state=2').code, 'h')
+
+  const basic = tokenRequest({ tokenUrl: 'https://id.test/token', clientId: 'id', clientSecret: 'sec', clientAuth: 'basic' }, authorizationCodeParams({}, { code: 'c', redirectUri: 'r', verifier: 'v' }))
+  assert.equal(basic.headers.find((h) => h.key === 'Authorization').value, 'Basic ' + Buffer.from('id:sec').toString('base64'))
+  assert.deepEqual(basic.body.fields.map((f) => f.key), ['grant_type', 'code', 'redirect_uri', 'code_verifier'])
+  const body = tokenRequest({ tokenUrl: 'https://id.test/token', clientId: 'id', clientSecret: 'sec', clientAuth: 'body', scope: 's' }, refreshParams({ scope: 's' }, 'rt'))
+  assert.equal(body.headers.some((h) => h.key === 'Authorization'), false)
+  assert.deepEqual(Object.fromEntries(body.body.fields.map((f) => [f.key, f.value])), { grant_type: 'refresh_token', refresh_token: 'rt', scope: 's', client_id: 'id', client_secret: 'sec' })
+  const pub = tokenRequest({ tokenUrl: 't', clientId: 'id', clientSecret: '', clientAuth: 'basic' }, { grant_type: 'client_credentials' })
+  assert.ok(pub.body.fields.some((f) => f.key === 'client_id'))
+
+  const t = parseTokenResponse({ status: 200, json: { access_token: 'a', expires_in: 60, token_type: 'bearer' } }, { refreshToken: 'old' }, 1000)
+  assert.deepEqual([t.accessToken, t.refreshToken, t.expiresAt], ['a', 'old', 61000])
+  assert.equal(parseTokenResponse({ status: 200, body: 'access_token=gh&scope=repo' }).accessToken, 'gh')
+  assert.throws(() => parseTokenResponse({ status: 400, json: { error: 'invalid_grant', error_description: 'bad code' } }), /invalid_grant: bad code/)
+  assert.equal(isExpired({ expiresAt: 61000 }, 40000), true) // within the 30 s margin
+  assert.equal(isExpired({ expiresAt: null }, 1e15), false)
+})
+
+test('OAuth: resolveRequest adds the token, snippets get a placeholder; Postman round trip', () => {
+  const req = newRequest('o', { url: 'https://api.test' })
+  req.auth = { ...newAuth('oauth2'), oauth2: { ...newAuth().oauth2, headerPrefix: 'Token' } }
+  assert.equal(resolveRequest(req, new Map(), { oauthToken: 'abc' }).headers[0].value, 'Token abc')
+  assert.equal(resolveRequest(req, new Map()).headers[0].value, 'Token <access token>')
+
+  const col = newCollection('C')
+  col.auth = { ...newAuth('oauth2'), oauth2: { ...newAuth().oauth2, grantType: 'client_credentials', tokenUrl: 'https://id.test/token', clientId: 'cid', clientSecret: 's3cret', scope: 'a b' } }
+  const back = importPostman(exportPostman(col)).collection.auth
+  assert.equal(back.type, 'oauth2')
+  assert.equal(back.oauth2.grantType, 'client_credentials')
+  assert.equal(back.oauth2.tokenUrl, 'https://id.test/token')
+  assert.equal(back.oauth2.scope, 'a b')
+  col.items.push(newRequest('r'))
+  assert.equal(buildDocsSnapshot(col).items[0].auth.oauth2.clientSecret, '<client-secret>')
+})

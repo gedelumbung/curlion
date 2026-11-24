@@ -56,6 +56,20 @@ export const AUTH_DEFAULTS = {
   bearer: () => ({ token: '' }),
   basic: () => ({ username: '', password: '' }),
   apikey: () => ({ key: '', value: '', in: 'header' }), // header | query
+  oauth2: () => ({
+    grantType: 'authorization_code', // authorization_code | client_credentials
+    authUrl: '',
+    tokenUrl: '',
+    clientId: '',
+    clientSecret: '',
+    scope: '',
+    audience: '',
+    redirectUri: '', // empty: Curlion's own callback page
+    pkce: true,
+    clientAuth: 'basic', // basic (Authorization header) | body (client_id / client_secret fields)
+    headerPrefix: 'Bearer',
+    autoRefresh: true,
+  }),
 }
 
 export function newAuth(type = 'inherit') {
@@ -75,7 +89,7 @@ export function newRequest(name = 'New Request', patch = {}) {
     description: '', // shown on the published docs page
     params: [],
     headers: [],
-    auth: newAuth('inherit'), // inherit | none | bearer | basic | apikey
+    auth: newAuth('inherit'), // inherit | none | bearer | basic | apikey | oauth2
     body: {
       mode: 'none', // none | form-data | urlencoded | raw
       rawType: 'json', // json | text | xml | html

@@ -57,6 +57,7 @@
         "Postman Collection v2.1 import and export, and cURL import",
         "Environments, globals and variables with inline editing",
         "Collection and folder auth and headers, inherited by every request inside",
+        "OAuth 2.0: authorization code with PKCE and client credentials, with automatic token refresh",
         "Team workspaces with shared environments",
         "Code snippets for cURL, JavaScript, PHP, Go and Python",
         "Published read-only API documentation",
@@ -80,7 +81,7 @@
           "name": "Is Curlion a good Postman alternative?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Curlion covers the everyday Postman workflow: collections and folders, environments and variables, auth, request bodies, a response viewer, history, tabs, cURL and Postman import/export, code snippets and published docs. It runs in the browser and stores data locally by default. It does not run Postman's pre-request and test scripts (they are skipped on import); Post-Response extraction handles token chaining. If your workflow depends on scripting, check that first."
+            "text": "Curlion covers the everyday Postman workflow: collections and folders, environments and variables, auth (including OAuth 2.0, set once per collection or folder), request bodies, a response viewer, history, tabs, cURL and Postman import/export, code snippets and published docs. It runs in the browser and stores data locally by default. It does not run Postman's pre-request and test scripts (they are skipped on import); Post-Response extraction handles token chaining. If your workflow depends on scripting, check that first."
           }
         },
         {
@@ -459,6 +460,11 @@
               <h3>Set auth once</h3>
               <p>Give a collection or folder its auth and headers, and every request inside inherits them. Rotate a token in one place, not fifty.</p>
             </article>
+            <article class="card">
+              <span class="ico"><svg viewBox="0 0 24 24"><path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z" /><circle cx="16.5" cy="7.5" r=".5" /></svg></span>
+              <h3>OAuth 2.0 built in</h3>
+              <p>Authorization code with PKCE or client credentials. Curlion fetches the token, refreshes it when it expires, and keeps it in your browser only.</p>
+            </article>
           </div>
         </div>
       </section>
@@ -705,7 +711,7 @@ VITE_SUPABASE_ANON_KEY</pre>
           <div class="faq">
             <details>
               <summary>Is Curlion a good Postman alternative?</summary>
-              <p>Curlion covers the everyday Postman workflow: collections and folders, environments and variables, auth, request bodies, a response viewer, history, tabs, cURL and Postman import/export, code snippets and published docs. It runs in the browser and stores data locally by default. It does not run Postman&#x27;s pre-request and test scripts (they are skipped on import); Post-Response extraction handles token chaining. If your workflow depends on scripting, check that first.</p>
+              <p>Curlion covers the everyday Postman workflow: collections and folders, environments and variables, auth (including OAuth 2.0, set once per collection or folder), request bodies, a response viewer, history, tabs, cURL and Postman import/export, code snippets and published docs. It runs in the browser and stores data locally by default. It does not run Postman&#x27;s pre-request and test scripts (they are skipped on import); Post-Response extraction handles token chaining. If your workflow depends on scripting, check that first.</p>
             </details>
             <details>
               <summary>Can I import my Postman collections into Curlion?</summary>

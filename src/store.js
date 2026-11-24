@@ -5,6 +5,20 @@ import { clone, ensureProtocol, findNode, folderPath, newCollection, newEnvironm
 import { buildScope, getByPath, interpolate } from './lib/variables.js'
 import { paramsFromUrl } from './lib/url.js'
 import { applyInheritance, resolveRequest } from './lib/resolve.js'
+import {
+  OAUTH_CHANNEL,
+  authorizationCodeParams,
+  authorizeUrl,
+  clientCredentialsParams,
+  defaultRedirectUri,
+  isExpired,
+  parseRedirect,
+  parseTokenResponse,
+  pkcePair,
+  randomString,
+  refreshParams,
+  tokenRequest,
+} from './lib/oauth.js'
 import { AGENT_DEFAULT_PORT, agentBase, pingAgent, sendRequest } from './lib/http.js'
 import { connectSocketIo, connectWsAgent, connectWsDirect } from './lib/realtime.js'
 import { GRPC_STATUS, decodeMessage, encodeMessage, findMethod, parseProto } from './lib/grpc.js'
@@ -28,6 +42,8 @@ export const state = reactive({
   collections: [],
   environments: [],
   envCurrent: {}, // this user's current values: envId -> varId -> value (browser only, never synced)
+  oauthTokens: {}, // OAuth 2.0 tokens: id of the request / folder / collection whose auth got them -> token (browser only, never synced)
+  oauthPending: null, // { key, startedAt } while an authorization code sign-in is open in a popup
   activeEnvId: null,
   mode: 'direct', // direct | proxy | agent
   agent: { port: AGENT_DEFAULT_PORT, status: 'unknown', version: null }, // Curlion Agent on this computer
@@ -225,6 +241,7 @@ export async function init() {
   ])
   const savedTabs = await getMeta('tabs', [])
   state.envCurrent = (await getMeta('envCurrent', {})) || {}
+  state.oauthTokens = (await getMeta('oauthTokens', {})) || {}
   cols.sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''))
   state.collections = cols
   state.environments = envs
@@ -931,6 +948,162 @@ export function setVariable(key, value) {
   return env
 }
 
+
+// ---- OAuth 2.0 ------------------------------------------------------------------
+// Tokens are keyed by the id of the request, folder or collection whose auth settings got
+// them, so every request inheriting that auth shares one token. They stay in this browser.
+
+/** Key of the token used by a request (after applyInheritance). */
+export const oauthKeyFor = (eff) => eff.authSourceId || eff.id
+
+function saveOAuthTokens() {
+  debounce('save:oauthTokens', SAVE_DELAY, () => setMeta('oauthTokens', clone(toRaw(state.oauthTokens))))
+}
+
+export function clearOAuthToken(key) {
+  delete state.oauthTokens[key]
+  saveOAuthTokens()
+}
+
+/** OAuth settings with {{variables}} replaced. */
+function oauthConfig(auth) {
+  const c = auth.oauth2 || {}
+  const I = (v) => interpolate(v ?? '', scope.value).trim()
+  return { ...c, authUrl: I(c.authUrl), tokenUrl: I(c.tokenUrl), clientId: I(c.clientId), clientSecret: I(c.clientSecret), scope: I(c.scope), audience: I(c.audience), redirectUri: I(c.redirectUri) || defaultRedirectUri() }
+}
+
+/** POST to the token endpoint (through the current send mode) and store the token. */
+async function requestToken(key, cfg, params, previous = null) {
+  if (!cfg.tokenUrl) throw new Error('OAuth 2.0: enter the Access Token URL in the Auth tab.')
+  if (!cfg.clientId) throw new Error('OAuth 2.0: enter the Client ID in the Auth tab.')
+  let res
+  try {
+    res = await sendRequest(tokenRequest(cfg, params), { mode: state.mode, agentPort: state.agent.port })
+  } catch (e) {
+    throw new Error(`Could not reach the token endpoint: ${e.message}`)
+  }
+  const token = parseTokenResponse(res, previous)
+  state.oauthTokens[key] = token
+  saveOAuthTokens()
+  return token
+}
+
+export function refreshOAuthToken(auth, key) {
+  const prev = state.oauthTokens[key]
+  if (!prev?.refreshToken) throw new Error('This token has no refresh token. Get a new access token.')
+  return requestToken(key, oauthConfig(auth), refreshParams(oauthConfig(auth), prev.refreshToken), prev)
+}
+
+let oauthWaiter = null // { state, verifier, redirectUri, cfg, key, resolve, reject, cleanup }
+
+/** Authorization code: sign in through the provider in a popup, then exchange the code. */
+async function authorizeWithPopup(auth, key) {
+  const cfg = oauthConfig(auth)
+  if (!cfg.authUrl) throw new Error('OAuth 2.0: enter the Auth URL in the Auth tab.')
+  if (!cfg.clientId) throw new Error('OAuth 2.0: enter the Client ID in the Auth tab.')
+  cancelOAuth()
+  const st = randomString(16)
+  const pkce = cfg.pkce !== false ? await pkcePair() : null
+  let url
+  try {
+    url = authorizeUrl(cfg, { state: st, redirectUri: cfg.redirectUri, pkce })
+  } catch {
+    throw new Error(`OAuth 2.0: the Auth URL "${cfg.authUrl}" is not a valid URL.`)
+  }
+  const popup = window.open(url, 'curlion-oauth', 'popup,width=520,height=720')
+  if (!popup) throw new Error('The browser blocked the sign-in window. Allow popups for this site and try again.')
+  state.oauthPending = { key, startedAt: Date.now(), manual: cfg.redirectUri !== defaultRedirectUri() }
+  const channel = typeof BroadcastChannel === 'function' ? new BroadcastChannel(OAUTH_CHANNEL) : null
+  const code = await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('Sign-in timed out.')), 5 * 60_000)
+    const cleanup = () => {
+      clearTimeout(timer)
+      channel?.close()
+      oauthWaiter = null
+      state.oauthPending = null
+    }
+    oauthWaiter = { state: st, resolve, reject, cleanup }
+    if (channel) channel.onmessage = (e) => e.data?.type === 'redirect' && completeOAuthRedirect(e.data.url)
+  }).finally(() => oauthWaiter?.cleanup?.())
+  try {
+    popup.close()
+  } catch {}
+  return requestToken(key, cfg, authorizationCodeParams(cfg, { code, redirectUri: cfg.redirectUri, verifier: pkce?.verifier }))
+}
+
+/** Finish a pending sign-in from the URL the provider redirected to (callback page, or pasted by the user). */
+export function completeOAuthRedirect(url) {
+  if (!oauthWaiter) return false
+  let r
+  try {
+    r = parseRedirect(url.trim())
+  } catch {
+    oauthWaiter.reject(new Error('That is not a URL.'))
+    return true
+  }
+  if (r.error) oauthWaiter.reject(new Error(`Sign-in failed: ${r.error}`))
+  else if (!r.code) oauthWaiter.reject(new Error('The redirect URL has no "code" parameter.'))
+  else if (r.state !== oauthWaiter.state) oauthWaiter.reject(new Error('The redirect does not belong to this sign-in (state mismatch). Try again.'))
+  else oauthWaiter.resolve(r.code)
+  return true
+}
+
+export function cancelOAuth() {
+  oauthWaiter?.reject(new Error('Sign-in cancelled.'))
+}
+
+/** "Get new access token": interactive for the authorization code grant. */
+export function getNewOAuthToken(auth, key) {
+  const cfg = oauthConfig(auth)
+  if (cfg.grantType === 'client_credentials') return requestToken(key, cfg, clientCredentialsParams(cfg))
+  return authorizeWithPopup(auth, key)
+}
+
+/**
+ * A usable access token before sending: the stored one, refreshed when it has expired
+ * (or when `force`), or a new one for client credentials. Authorization code tokens need the
+ * user to sign in first (Auth tab).
+ */
+async function ensureOAuthToken(auth, key, { force = false, sourceName = '' } = {}) {
+  const cfg = oauthConfig(auth)
+  const tok = state.oauthTokens[key]
+  if (tok && !force && !isExpired(tok)) return tok.accessToken
+  if (tok?.refreshToken && cfg.autoRefresh !== false) {
+    try {
+      return (await requestToken(key, cfg, refreshParams(cfg, tok.refreshToken), tok)).accessToken
+    } catch (e) {
+      if (cfg.grantType !== 'client_credentials') throw new Error(`The access token expired and refreshing it failed (${e.message}). Get a new access token in the Auth tab${sourceName}.`)
+    }
+  }
+  if (cfg.grantType === 'client_credentials') return (await requestToken(key, cfg, clientCredentialsParams(cfg))).accessToken
+  if (tok && !force && cfg.autoRefresh === false) return tok.accessToken // expired, but refreshing is off: let the API decide
+  throw new Error(tok ? `The access token expired. Get a new one in the Auth tab${sourceName}.` : `No OAuth 2.0 access token yet. Click "Get new access token" in the Auth tab${sourceName}.`)
+}
+
+/**
+ * Turn a request into what is sent: inherited auth / headers applied, OAuth 2.0 token
+ * fetched or refreshed when needed, {{variables}} resolved.
+ * @returns {{ eff, resolved, oauth: { key, auth } | null }}
+ */
+export async function prepareRequest(req, { collectionId, forceToken = false } = {}) {
+  const eff = applyInheritance(req, ancestorsFor(req.id, collectionId))
+  let oauthToken
+  let oauth = null
+  if (eff.auth?.type === 'oauth2') {
+    const source = eff.authSourceId ? ancestorsFor(req.id, collectionId).find((a) => a.id === eff.authSourceId) : null
+    oauth = { key: oauthKeyFor(eff), auth: eff.auth }
+    oauthToken = await ensureOAuthToken(eff.auth, oauth.key, { force: forceToken, sourceName: source ? ` of "${source.name}"` : '' })
+  }
+  return { eff, resolved: resolveRequest(eff, scope.value, { oauthToken }), oauth }
+}
+
+/** Whether a 401 is worth one retry with a fresh token (refresh token, or client credentials). */
+function canRetryOAuth(oauth) {
+  if (!oauth) return false
+  const tok = state.oauthTokens[oauth.key]
+  return oauth.auth.oauth2?.grantType === 'client_credentials' || (!!tok?.refreshToken && oauth.auth.oauth2?.autoRefresh !== false)
+}
+
 // ---- Sending ------------------------------------------------------------
 
 // One in-flight request per tab; tabs can send concurrently.
@@ -955,8 +1128,10 @@ export async function send({ download = false } = {}) {
   controllers.set(id, controller)
   state.pending[id] = true
   delete state.errors[id]
-  const resolved = resolveRequest(withInheritance(req), scope.value)
+  let resolved
   try {
+    let oauth
+    ;({ resolved, oauth } = await prepareRequest(req))
     if (protocol === 'grpc') {
       const res = await invokeGrpc(req, resolved, controller.signal)
       state.responses[id] = res
@@ -973,7 +1148,12 @@ export async function send({ download = false } = {}) {
     if (state.mode === 'proxy' && /^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])/i.test(resolved.url)) {
       throw new Error('localhost cannot be reached through the cloud proxy. Use Agent mode (runs requests from your computer), or Direct mode with CORS enabled on your local server.')
     }
-    const res = await sendRequest(resolved, { mode: state.mode, agentPort: state.agent.port, download, signal: controller.signal })
+    let res = await sendRequest(resolved, { mode: state.mode, agentPort: state.agent.port, download, signal: controller.signal })
+    // OAuth 2.0: the token may have been revoked or expired early; get a fresh one and retry once
+    if (res.status === 401 && canRetryOAuth(oauth)) {
+      ;({ resolved } = await prepareRequest(req, { forceToken: true }))
+      res = await sendRequest(resolved, { mode: state.mode, agentPort: state.agent.port, download, signal: controller.signal })
+    }
     if (state.mode === 'agent') state.agent.status = 'online'
     res.at = Date.now()
     res.extracted = runExtract(req, res)
@@ -1071,8 +1251,15 @@ export async function connectRealtime() {
   const id = req.id
   const protocol = protocolOf(req)
   disconnectRealtime(id)
-  const resolved = resolveRequest(withInheritance(req), scope.value)
   const prev = state.conns[id]?.log || []
+  let resolved
+  try {
+    ;({ resolved } = await prepareRequest(req))
+  } catch (e) {
+    state.conns[id] = { status: 'closed', protocol, log: prev }
+    logConn(id, { dir: 'error', data: e.message })
+    return
+  }
   state.conns[id] = { status: 'connecting', protocol, log: prev }
   logConn(id, { dir: 'info', data: `Connecting to ${resolved.url}${state.mode === 'agent' && protocol === 'ws' ? ' (through the agent)' : ''}…` })
   const cb = {
@@ -1296,7 +1483,7 @@ async function clearLocalData() {
   await db.transaction('rw', db.workspaces, db.collections, db.environments, db.history, db.tombstones, async () => {
     await Promise.all([db.workspaces.clear(), db.collections.clear(), db.environments.clear(), db.history.clear(), db.tombstones.clear()])
   })
-  await Promise.all(['tabs', 'active', 'activeEnvId', 'envByWorkspace', 'workspaceId', 'lastUserId', 'envCurrent', 'drafts'].map((k) => db.meta.delete(k)))
+  await Promise.all(['tabs', 'active', 'activeEnvId', 'envByWorkspace', 'workspaceId', 'lastUserId', 'envCurrent', 'drafts', 'oauthTokens'].map((k) => db.meta.delete(k)))
   draftBase.clear()
   activityBase.clear()
   pendingLogs.clear()
@@ -1308,6 +1495,8 @@ async function clearLocalData() {
     collections: [],
     environments: [globals],
     envCurrent: {},
+    oauthTokens: {},
+    oauthPending: null,
     drafts: {},
     unsavedPrompt: null,
     savePrompt: null,

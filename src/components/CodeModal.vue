@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 import { Copy } from 'lucide-vue-next'
 import Modal from './Modal.vue'
 import CodeEditor from './CodeEditor.vue'
-import { activeRequest, scope, toast, withInheritance } from '../store.js'
+import { activeRequest, oauthKeyFor, scope, state, toast, withInheritance } from '../store.js'
 import { resolveRequest } from '../lib/resolve.js'
 import { generateSnippet, snippetLangsFor } from '../lib/snippets.js'
 import { copyText } from '../lib/ui.js'
@@ -17,7 +17,10 @@ const maskSecrets = ref(true)
 
 const code = computed(() => {
   if (!activeRequest.value) return ''
-  const resolved = resolveRequest(withInheritance(activeRequest.value), scope.value, { maskSecrets: maskSecrets.value })
+  const eff = withInheritance(activeRequest.value)
+  // OAuth 2.0: the stored access token, unless secrets are masked (then a placeholder)
+  const oauthToken = eff.auth?.type === 'oauth2' && !maskSecrets.value ? state.oauthTokens[oauthKeyFor(eff)]?.accessToken : undefined
+  const resolved = resolveRequest(eff, scope.value, { maskSecrets: maskSecrets.value, oauthToken })
   return generateSnippet(lang.value, resolved, activeRequest.value)
 })
 

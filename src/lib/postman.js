@@ -1,5 +1,5 @@
 // Postman Collection v2.1 importer / exporter.
-import { kv, newCollection, newEnvironment, newFolder, newRequest, newSample, uid } from './model.js'
+import { AUTH_DEFAULTS, kv, newCollection, newEnvironment, newFolder, newRequest, newSample, uid } from './model.js'
 import { inheritedHeaders } from './resolve.js'
 import { parseQuery } from './url.js'
 
@@ -27,7 +27,24 @@ function mapAuth(pmAuth, req) {
     req.auth.type = 'apikey'
     req.auth.apikey.key = String(authVal(pmAuth.apikey, 'key'))
     req.auth.apikey.value = String(authVal(pmAuth.apikey, 'value'))
-    req.auth.apikey.in = authVal(pmAuth.apikey, 'in') === 'query' ? 'query' : 'header'
+    req.auth.apikey.in = authVal(pmAuth.apikey, 'in') === 'query' ? 'query' : 'header'  } else if (pmAuth.type === 'oauth2') {
+    const v = (k) => String(authVal(pmAuth.oauth2, k) ?? '')
+    const grant = v('grant_type') || 'authorization_code'
+    const redirect = v('redirect_uri')
+    req.auth.type = 'oauth2'
+    req.auth.oauth2 = {
+      ...AUTH_DEFAULTS.oauth2(),
+      grantType: grant === 'client_credentials' ? 'client_credentials' : 'authorization_code',
+      pkce: grant !== 'authorization_code', // PKCE unless the collection explicitly turned it off
+      authUrl: v('authUrl'),
+      tokenUrl: v('accessTokenUrl'),
+      clientId: v('clientId'),
+      clientSecret: v('clientSecret'),
+      scope: v('scope'),
+      redirectUri: /oauth\.pstmn\.io/.test(redirect) ? '' : redirect, // Postman's own callback: use Curlion's
+      clientAuth: v('client_authentication') === 'body' ? 'body' : 'basic',
+      headerPrefix: authVal(pmAuth.oauth2, 'headerPrefix') === '' ? 'Bearer' : v('headerPrefix') || 'Bearer',
+    }
   }
 }
 
@@ -137,6 +154,9 @@ export function importPostman(json) {
 
   // Collection and folder auth are inherited by requests without their own, as in Postman
   mapAuth(data.auth, col)
+  if (/"value":\s*"(password_credentials|implicit)"/.test(JSON.stringify(data))) {
+    warnings.push('OAuth 2.0 password and implicit grants are not supported; those requests were set to the authorization code grant.')
+  }
   if (data.event?.length || JSON.stringify(data.item).includes('"event"')) {
     warnings.push('Pre-request/test scripts are not supported and were skipped. Use the Extract tab instead.')
   }
@@ -165,6 +185,12 @@ function exportAuth(a) {
       type: 'apikey',
       apikey: [{ key: 'key', value: a.apikey.key, type: 'string' }, { key: 'value', value: a.apikey.value, type: 'string' }, { key: 'in', value: a.apikey.in, type: 'string' }],
     }
+  if (a.type === 'oauth2') {
+    const o = { ...AUTH_DEFAULTS.oauth2(), ...(a.oauth2 || {}) }
+    const grant = o.grantType === 'client_credentials' ? 'client_credentials' : o.pkce ? 'authorization_code_with_pkce' : 'authorization_code'
+    const entries = { grant_type: grant, authUrl: o.authUrl, accessTokenUrl: o.tokenUrl, clientId: o.clientId, clientSecret: o.clientSecret, scope: o.scope, redirect_uri: o.redirectUri, client_authentication: o.clientAuth === 'body' ? 'body' : 'header', headerPrefix: o.headerPrefix, addTokenTo: 'header' }
+    return { type: 'oauth2', oauth2: Object.entries(entries).filter(([, v]) => v !== '').map(([key, value]) => ({ key, value, type: 'string' })) }
+  }
 }
 
 function exportBody(b) {

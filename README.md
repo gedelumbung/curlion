@@ -57,7 +57,8 @@ netlify dev        # runs Vite + edge functions at /api/proxy and /mock/*
 | --- | --- |
 | CRUD for requests/folders/collections, duplicate, rename, drag & drop | ✅ |
 | Methods GET/POST/PUT/PATCH/DELETE/OPTIONS/HEAD | ✅ |
-| Params ↔ URL bar (two-way sync), Headers (autocomplete), Auth (Bearer/Basic/API Key in header or query) | ✅ |
+| Params ↔ URL bar (two-way sync), Headers (autocomplete), Auth (Bearer/Basic/API Key in header or query, OAuth 2.0) | ✅ |
+| **OAuth 2.0**: authorization code (with PKCE, sign-in in a popup that returns to `/oauth-callback.html`; with another callback URL, paste where you landed) and client credentials (fetched automatically on send). Expired tokens are refreshed with the refresh token before sending, and a `401` gets one retry with a fresh token. Token requests go through the current send mode (Direct / Proxy / Agent). Tokens are kept per auth owner (request, folder or collection) in this browser only, never synced or published; the client secret is hidden in published docs | ✅ |
 | **Auth and headers on collections and folders** (sidebar menu or collection overview → *Auth & headers*): requests set to *Inherit from parent* (the default for new requests) use the nearest folder's auth, then the collection's; collection and folder headers are added to every request inside, and a request's own header with the same name wins. The Auth and Headers tabs show what is inherited and from where | ✅ |
 | Body: none, form-data (text/file), x-www-form-urlencoded, raw (JSON/Text/XML/HTML) | ✅ |
 | Response: colored status, time (ms), size, headers, Pretty/Tree/Raw, Copy | ✅ |
@@ -125,6 +126,7 @@ src/
     variables.js        {{var}} interpolation, dynamic vars, JSON path
     url.js              URL ↔ params sync
     resolve.js          request + env → final request (inherited auth/headers, auth, body)
+    oauth.js            OAuth 2.0: PKCE, authorize URL, token requests, token parsing
     http.js             fetch engine (direct/proxy), binary detection
     curl.js             cURL parser
     postman.js          Postman v2.1 import/export

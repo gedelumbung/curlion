@@ -102,6 +102,7 @@ const authLabel = (a) =>
     bearer: 'Bearer token in the Authorization header',
     basic: 'HTTP Basic auth (username and password)',
     apikey: `API key "${a?.apikey?.key}" in the ${a?.apikey?.in === 'query' ? 'query string' : 'request headers'}`,
+    oauth2: `OAuth 2.0 (${a?.oauth2?.grantType === 'client_credentials' ? 'client credentials' : `authorization code${a?.oauth2?.pkce !== false ? ' with PKCE' : ''}`}${a?.oauth2?.tokenUrl ? `, token URL ${a.oauth2.tokenUrl}` : ''}${a?.oauth2?.scope ? `, scope "${a.oauth2.scope}"` : ''})`,
   })[a?.type]
 
 const bodyLabel = { 'form-data': 'multipart/form-data', urlencoded: 'application/x-www-form-urlencoded' }
