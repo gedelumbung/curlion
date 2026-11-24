@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { AlertTriangle, Check, Copy, Download, FileDown, GitCompareArrows, Radio, Save, Square, WrapText, X } from 'lucide-vue-next'
 import CodeEditor from './CodeEditor.vue'
 import JsonTree from './JsonTree.vue'
+import ResponseMeta from './ResponseMeta.vue'
 import { activeError, activeLoading, activeRequest, activeResponse, activeStream, addSampleNow, cancel, isHistoryId, state, toast } from '../store.js'
 import { kv, newSample } from '../lib/model.js'
 import { linkParts } from '../lib/links.js'
@@ -116,8 +117,11 @@ function saveAsSample() {
         <span class="ml-auto font-mono text-xs" :class="statusColor(res.status, res.grpc)" :title="res.grpc && res.message ? res.message : undefined">{{ res.status }} {{ res.statusText }}</span>
         <span v-if="res.lines" class="rounded bg-zinc-800 px-1.5 py-0.5 font-mono text-[11px] text-zinc-400" title="Newline-delimited JSON: one JSON value per line">NDJSON · {{ res.lines.length }} lines</span>
         <span v-if="res.aborted" class="rounded bg-amber-500/10 px-1.5 py-0.5 text-[11px] text-amber-400" title="Stopped before the response finished: the body is what had arrived">stopped · partial</span>
-        <span class="font-mono text-xs text-zinc-400" :title="res.ttfb !== undefined && res.time - res.ttfb > 50 ? `First byte after ${res.ttfb} ms, then ${res.time - res.ttfb} ms streaming the body` : undefined">{{ res.time }} ms</span>
-        <span class="font-mono text-xs text-zinc-400">{{ formatSize(res.size) }}</span>
+        <ResponseMeta v-if="!res.grpc" :res="res" />
+        <template v-else>
+          <span class="font-mono text-xs text-zinc-400">{{ res.time }} ms</span>
+          <span class="font-mono text-xs text-zinc-400">{{ formatSize(res.size) }}</span>
+        </template>
         <button v-if="!res.binary" class="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100" title="Compare with an earlier response, a sample or another tab" @click="emit('compare')">
           <GitCompareArrows :size="13" /> Compare
         </button>

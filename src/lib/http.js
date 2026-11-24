@@ -1,5 +1,7 @@
 // Request engine: Direct Browser Mode, Netlify Proxy Mode and Agent Mode (Curlion Agent on this computer).
 import { urlencode } from './resolve.js'
+import { uid } from './model.js'
+import { estimateRequestSize, estimateResponseHeaderSize, fromResourceTiming } from './metrics.js'
 
 export const PROXY_PATH = '/api/proxy'
 export const AGENT_DEFAULT_PORT = 5577
@@ -197,6 +199,7 @@ async function fetchResolved(resolved, opts = {}) {
     headers.set('X-Curlion-Url', resolved.url)
     headers.set('X-Curlion-Method', resolved.method)
     headers.set('X-Curlion-Headers', encodeURIComponent(JSON.stringify(resolved.headers)))
+    if (opts.timingId) headers.set('X-Curlion-Id', opts.timingId) // the agent keeps this request's timing for GET /timing
     fetchUrl = mode === 'agent' ? `${agentBase(agentPort)}/proxy` : PROXY_PATH
     init = { method: 'POST', headers, body: body ?? '', signal }
     if (mode === 'agent') init.targetAddressSpace = 'loopback' // the agent runs on this computer
@@ -239,6 +242,35 @@ async function fetchResolved(resolved, opts = {}) {
     throw new Error(`${mode === 'agent' ? 'Agent' : 'Proxy'} error: ${await res.text()}`)
   }
   return { res, relayed, started }
+}
+
+// ---- timing / size / network details (see metrics.js) ---------------------------------
+
+if (typeof performance !== 'undefined' && performance.setResourceTimingBufferSize) performance.setResourceTimingBufferSize(500)
+
+/** The browser's Resource Timing entry for this fetch (Direct mode). */
+async function resourceEntry(urls, since) {
+  if (typeof performance === 'undefined' || !performance.getEntriesByType) return null
+  await new Promise((r) => setTimeout(r, 0)) // the entry is added once the body has been read
+  const list = performance.getEntriesByType('resource')
+  const hit = list.filter((e) => urls.includes(e.name) && e.startTime >= since - 1).at(-1) || null
+  if (list.length > 400) performance.clearResourceTimings()
+  return hit
+}
+
+/** Details for metrics.buildMetrics(): { source, detail } */
+async function collectDetail({ mode, agentPort, timingId, urls, started }) {
+  try {
+    if (mode === 'agent' && timingId) {
+      const r = await fetch(`${agentBase(agentPort)}/timing?id=${encodeURIComponent(timingId)}`, { cache: 'no-store', targetAddressSpace: 'loopback' })
+      return r.ok ? { source: 'agent', detail: await r.json() } : { source: 'agent', detail: null } // older agents: 404
+    }
+    if (mode === 'direct') {
+      const d = fromResourceTiming(await resourceEntry(urls, started))
+      return { source: 'browser', detail: d && (d.detailed || d.httpVersion || d.size) ? d : null }
+    }
+  } catch {}
+  return { source: mode === 'agent' ? 'agent' : 'basic', detail: null }
 }
 
 /** Status, status text and headers of the target's response (relayed modes carry them in X-Curlion-*). */
@@ -327,9 +359,26 @@ async function readText(res, { onProgress, signal } = {}) {
  *   returns what was received so far, marked `aborted` }
  */
 export async function sendRequest(resolved, opts = {}) {
-  const { download = false, saveBinary = true, onProgress, signal } = opts
-  const { res, relayed, started } = await fetchResolved(resolved, opts)
-  const ttfb = Math.round(performance.now() - started) // headers received
+  const { download = false, saveBinary = true, onProgress, signal, mode = 'direct', agentPort } = opts
+  const timingId = mode === 'agent' ? uid() : null
+  const { res, relayed, started } = await fetchResolved(resolved, { ...opts, timingId })
+  const headersAt = performance.now()
+  const ttfb = Math.round(headersAt - started) // headers received
+  // inputs for metrics.buildMetrics(); the store adds prepare / process times
+  const metricsInput = async (bodyBytes) => {
+    const end = performance.now()
+    return {
+      base: {
+        mode,
+        ttfb: +(headersAt - started).toFixed(2),
+        download: +(end - headersAt).toFixed(2),
+        requestSize: estimateRequestSize(resolved),
+        responseHeaders: estimateResponseHeaderSize(result.status, result.statusText, result.headers),
+        responseBody: bodyBytes,
+      },
+      ...(await collectDetail({ mode, agentPort, timingId, urls: [res.url, resolved.url], started })),
+    }
+  }
 
   const { status, statusText, headers: responseHeaders } = responseMeta(res, relayed)
   const hdrs = new Headers(responseHeaders.map((h) => [h.key, h.value]))
@@ -353,6 +402,7 @@ export async function sendRequest(resolved, opts = {}) {
     const blob = await res.blob()
     result.time = Math.round(performance.now() - started)
     result.size = blob.size
+    result.metricsInput = await metricsInput(blob.size)
     result.binary = true
     result.fileName = withExtension(filenameFrom(hdrs, resolved.url), result.contentType)
     if (!saveBinary) return result
@@ -371,6 +421,7 @@ export async function sendRequest(resolved, opts = {}) {
   result.time = Math.round(performance.now() - started)
   result.body = read.text
   result.size = read.bytes
+  result.metricsInput = await metricsInput(read.bytes)
   if (read.aborted) result.aborted = true
   try {
     result.json = JSON.parse(result.body)

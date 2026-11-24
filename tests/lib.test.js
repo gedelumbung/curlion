@@ -868,3 +868,40 @@ test('jsonChanges and sortKeysDeep', () => {
   assert.deepEqual(jsonChanges({ a: [1] }, { a: [1] }), [])
   assert.equal(JSON.stringify(sortKeysDeep({ b: 1, a: { d: 1, c: [{ z: 1, y: 2 }] } })), '{"a":{"c":[{"y":2,"z":1}],"d":1},"b":1}')
 })
+
+// ---- Response metrics (time / size / network) ------------------------------------------
+import { buildMetrics, estimateRequestSize, estimateResponseHeaderSize, fromResourceTiming, networkTime } from '../src/lib/metrics.js'
+
+test('metrics: request / response size estimates', () => {
+  const r = estimateRequestSize({ method: 'POST', url: 'https://api.test/v1/items?x=1', headers: [{ key: 'Content-Type', value: 'application/json' }], body: { mode: 'raw', raw: '{"é":1}' } })
+  assert.equal(r.headers, 'POST /v1/items?x=1 HTTP/1.1\r\nHost: api.test\r\n'.length + 2 + 'Content-Type: application/json\r\n'.length)
+  assert.equal(r.body, 8) // 7 characters, é is two bytes
+  assert.equal(estimateRequestSize({ method: 'POST', url: 'https://a.test', headers: [], body: { mode: 'urlencoded', fields: [{ key: 'a b', value: '1' }] } }).body, 'a%20b=1'.length)
+  assert.equal(estimateResponseHeaderSize(200, 'OK', [{ key: 'a', value: 'b' }]), 'HTTP/1.1 200 OK\r\n'.length + 2 + 'a: b\r\n'.length)
+})
+
+test('metrics: Resource Timing with and without Timing-Allow-Origin, agent details', () => {
+  const full = fromResourceTiming({ nextHopProtocol: 'h2', fetchStart: 10, domainLookupStart: 11, domainLookupEnd: 15, connectStart: 15, secureConnectionStart: 20, connectEnd: 30, requestStart: 31, responseStart: 81, responseEnd: 90, transferSize: 1300, encodedBodySize: 1000 })
+  assert.deepEqual(full.timing, { socket: 1, dns: 4, tcp: 5, tls: 10, ttfb: 50, download: 9 })
+  assert.equal(full.httpVersion, '2')
+  assert.deepEqual(full.size, { responseBody: 1000, responseHeaders: 300 })
+  const reused = fromResourceTiming({ nextHopProtocol: 'http/1.1', fetchStart: 1, domainLookupStart: 1, domainLookupEnd: 1, connectStart: 1, connectEnd: 1, requestStart: 2, responseStart: 5, responseEnd: 6 })
+  assert.equal(reused.timing.dns, 'reused')
+  const hidden = fromResourceTiming({ nextHopProtocol: '', fetchStart: 1, requestStart: 0, responseStart: 0, responseEnd: 40, transferSize: 0, encodedBodySize: 0 })
+  assert.equal(hidden.detailed, false)
+
+  const base = { mode: 'direct', prepare: 2, ttfb: 60, download: 5, process: 1, requestSize: { headers: 100, body: 0 }, responseHeaders: 200, responseBody: 5000 }
+  const basic = buildMetrics(base, null, 'basic')
+  assert.equal(basic.source, 'basic')
+  assert.equal(basic.timing.dns, null)
+  assert.match(basic.note, /Timing-Allow-Origin/)
+  assert.equal(networkTime(basic.timing), 65)
+
+  const agent = buildMetrics({ ...base, mode: 'agent' }, { timing: { socket: 0.5, dns: 'reused', tcp: 'reused', tls: 'reused', ttfb: 61, download: 1.2, total: 63 }, size: { requestHeaders: 966, requestBody: 32, responseHeaders: 463, responseBody: 1200 }, network: { httpVersion: '1.1', remoteAddress: '1.2.3.4:443', tlsProtocol: 'TLSv1.3', certCN: '*.example.com' } }, 'agent')
+  assert.equal(agent.note, null)
+  assert.equal(agent.timing.prepare, 2)
+  assert.equal(agent.timing.ttfb, 61)
+  assert.deepEqual([agent.size.requestHeaders, agent.size.responseBody, agent.size.responseBodyDecoded, agent.size.estimated.requestHeaders], [966, 1200, 5000, false])
+  assert.equal(agent.network.certCN, '*.example.com')
+  assert.match(buildMetrics({ ...base, mode: 'agent' }, null, 'agent').note, /too old/)
+})

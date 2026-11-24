@@ -27,6 +27,7 @@ import { indentString } from './lib/settings.js'
 import { collectionToRow, environmentToRow, rowToCollection, rowToEnvironment, rowToWorkspace, supabase } from './lib/supabase.js'
 import { countRequests, diffTrees } from './lib/activity.js'
 import { runTests, summarize } from './lib/assertions.js'
+import { buildMetrics } from './lib/metrics.js'
 import { buildDocsSnapshot } from './lib/publish.js'
 
 const SAVE_DELAY = 300 // IndexedDB write debounce
@@ -1189,6 +1190,7 @@ function rememberResponse(id, res) {
  * @returns {{ res, resolved }} res also carries .tests and .extracted
  */
 export async function executeHttp(req, { collectionId, download = false, saveBinary = true, signal, onProgress } = {}) {
+  let t0 = performance.now()
   let { resolved, oauth } = await prepareRequest(req, { collectionId })
   if (protocolOf(req) === 'graphql') {
     try {
@@ -1201,16 +1203,24 @@ export async function executeHttp(req, { collectionId, download = false, saveBin
     throw new Error('localhost cannot be reached through the cloud proxy. Use Agent mode (runs requests from your computer), or Direct mode with CORS enabled on your local server.')
   }
   const opts = { mode: state.mode, agentPort: state.agent.port, download, saveBinary, signal, onProgress }
+  let prepare = performance.now() - t0
   let res = await sendRequest(resolved, opts)
   // OAuth 2.0: the token may have been revoked or expired early; get a fresh one and retry once
   if (res.status === 401 && canRetryOAuth(oauth)) {
+    t0 = performance.now()
     ;({ resolved } = await prepareRequest(req, { collectionId, forceToken: true }))
+    prepare = performance.now() - t0
     res = await sendRequest(resolved, opts)
   }
   if (state.mode === 'agent') state.agent.status = 'online'
+  const t1 = performance.now()
   res.at = Date.now()
   res.tests = runTests(req.tests, res, (v) => interpolate(v, scope.value))
   res.extracted = runExtract(req, res)
+  // timing / size / network details (Response pane popovers)
+  const { base, detail, source } = res.metricsInput || {}
+  delete res.metricsInput
+  if (base) res.metrics = buildMetrics({ ...base, prepare: +prepare.toFixed(2), process: +(performance.now() - t1).toFixed(2) }, detail, source)
   return { res, resolved }
 }
 

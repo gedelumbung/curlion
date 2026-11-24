@@ -21,7 +21,7 @@ import zlib from 'node:zlib'
 import crypto from 'node:crypto'
 import { pipeline } from 'node:stream/promises'
 
-const VERSION = '1.2.0' // 1.1: gRPC (HTTP/2) and WebSocket bridge; 1.2: no idle timeout on Server-Sent Events streams
+const VERSION = '1.3.0' // 1.1: gRPC (HTTP/2) and WebSocket bridge; 1.2: no idle timeout on Server-Sent Events streams; 1.3: timing, network and size details (GET /timing)
 
 // ---- options ----------------------------------------------------------------
 const args = process.argv.slice(2)
@@ -77,15 +77,32 @@ async function readBody(req) {
   return Buffer.concat(chunks)
 }
 
-/** One HTTP(S) request without following redirects. */
-function once(url, method, headers, body) {
+const now = () => performance.now()
+
+/**
+ * One HTTP(S) request without following redirects.
+ * Fills `t` with when each phase happened (performance.now()): start, socket, lookup, connect,
+ * secure, sent, headers; reused when the connection came from the keep-alive pool.
+ */
+function once(url, method, headers, body, t = {}) {
   return new Promise((resolve, reject) => {
     const lib = url.protocol === 'https:' ? https : http
+    t.start = now()
     const req = lib.request(url, { method, headers, rejectUnauthorized: STRICT_TLS }, (res) => {
+      t.headers = now()
+      t.requestHeaderBytes = Buffer.byteLength(req._header || '')
       // event streams may stay quiet for minutes between events: no idle timeout once they are open
       if (/text\/event-stream/i.test(res.headers['content-type'] || '')) req.setTimeout(0)
       resolve(res)
     })
+    req.on('socket', (sock) => {
+      t.socket = now()
+      t.reused = !sock.connecting // already connected: a kept-alive connection
+      sock.once('lookup', () => (t.lookup = now()))
+      sock.once('connect', () => (t.connect = now()))
+      sock.once('secureConnect', () => (t.secure = now()))
+    })
+    req.on('finish', () => (t.sent = now()))
     req.on('error', reject)
     req.setTimeout(120_000, () => req.destroy(new Error('timed out after 120s')))
     if (body?.length) req.write(body)
@@ -94,9 +111,12 @@ function once(url, method, headers, body) {
 }
 
 /** Send the request, following redirects like a browser (max 10). */
-async function send(url, method, headers, body) {
+async function send(url, method, headers, body, t = {}) {
   for (let hop = 0; hop <= 10; hop++) {
-    const res = await once(url, method, headers, body)
+    for (const k of Object.keys(t)) if (k !== 'first') delete t[k] // timing of the last hop
+    t.redirects = hop
+    const res = await once(url, method, headers, body, t)
+    t.first ??= t.start
     const loc = res.headers.location
     if (![301, 302, 303, 307, 308].includes(res.statusCode) || !loc) return { res, url }
     res.resume()
@@ -141,6 +161,7 @@ const server = http.createServer(async (req, res) => {
     return res.end(JSON.stringify({ name: 'curlion-agent', version: VERSION }))
   }
   if (req.method === 'POST' && path === '/grpc') return handleGrpc(req, res)
+  if (req.method === 'GET' && path === '/timing') return handleTiming(req, res)
   if (req.method === 'GET' && path === '/ws/connect') return handleWsConnect(req, res)
   if (req.method === 'POST' && (path === '/ws/send' || path === '/ws/close')) return handleWsCommand(req, res, path)
   if (req.method !== 'POST' || path !== '/proxy') return fail(res, 404, 'Not found')
@@ -176,8 +197,10 @@ const server = http.createServer(async (req, res) => {
   } else req.resume()
 
   let upstream
+  const t = {}
+  const timingId = String(req.headers['x-curlion-id'] || '').slice(0, 64)
   try {
-    upstream = (await send(target, method, headers, body)).res
+    upstream = (await send(target, method, headers, body, t)).res
   } catch (err) {
     const why = describeError(err)
     log(method, target, `ERROR ${why}`, started)
@@ -196,6 +219,7 @@ const server = http.createServer(async (req, res) => {
   if (upstream.headers['content-disposition']) out['Content-Disposition'] = upstream.headers['content-disposition']
   res.writeHead(200, out)
   log(method, target, upstream.statusCode, started)
+  if (timingId) recordTiming(timingId, t, upstream, body)
 
   if (method === 'HEAD' || [204, 205, 304].includes(upstream.statusCode)) {
     upstream.resume()
@@ -208,6 +232,80 @@ const server = http.createServer(async (req, res) => {
     res.destroy()
   }
 })
+
+// ---- timing, network and size details ------------------------------------------------
+// The browser tags a /proxy request with X-Curlion-Id and asks GET /timing?id=… once it has
+// read the body. Entries are dropped after a minute.
+
+const timings = new Map()
+const ms = (a, b) => (a !== undefined && b !== undefined ? Math.max(0, +(b - a).toFixed(2)) : null)
+
+function recordTiming(id, t, upstream, body) {
+  const sock = upstream.socket
+  const entry = { done: false }
+  let wireBytes = 0
+  upstream.on('data', (c) => (wireBytes += c.length))
+  const finish = () => {
+    if (entry.done) return
+    entry.done = true
+    const end = now()
+    const connected = t.secure ?? t.connect ?? t.socket
+    const reused = !!t.reused
+    entry.timing = {
+      socket: ms(t.start, t.socket),
+      dns: reused ? 'reused' : t.lookup !== undefined ? ms(t.socket, t.lookup) : null, // no lookup for IP addresses
+      tcp: reused ? 'reused' : ms(t.lookup ?? t.socket, t.connect),
+      tls: reused ? 'reused' : t.secure !== undefined ? ms(t.connect, t.secure) : null,
+      ttfb: ms(Math.max(t.sent ?? 0, connected ?? 0) || t.start, t.headers),
+      download: ms(t.headers, end),
+      total: ms(t.first ?? t.start, end),
+    }
+    entry.size = { requestHeaders: t.requestHeaderBytes || null, requestBody: body?.length || 0, responseHeaders: rawHeaderBytes(upstream), responseBody: wireBytes }
+  }
+  upstream.once('end', finish)
+  upstream.once('close', finish)
+  let cert = null
+  if (sock?.encrypted) {
+    try {
+      cert = sock.getPeerCertificate()
+    } catch {}
+  }
+  entry.network = {
+    httpVersion: upstream.httpVersion,
+    localAddress: sock?.localAddress ? hostPort(sock.localAddress, sock.localPort) : null,
+    remoteAddress: sock?.remoteAddress ? hostPort(sock.remoteAddress, sock.remotePort) : null,
+    tlsProtocol: sock?.encrypted ? sock.getProtocol?.() || null : null,
+    cipher: sock?.encrypted ? sock.getCipher?.()?.standardName || sock.getCipher?.()?.name || null : null,
+    certCN: cert?.subject?.CN || null,
+    issuerCN: cert?.issuer?.CN || cert?.issuer?.O || null,
+    validTo: cert?.valid_to || null,
+    authorized: sock?.encrypted ? !!sock.authorized : null,
+    redirects: t.redirects || 0,
+  }
+  timings.set(id, entry)
+  setTimeout(() => timings.delete(id), 60_000).unref()
+}
+
+/** 1.2.3.4:443, or [::1]:443 for IPv6 (IPv4-mapped addresses shown as IPv4). */
+function hostPort(address, port) {
+  const a = address.replace(/^::ffff:(?=\d+\.)/, '')
+  return a.includes(':') ? `[${a}]:${port}` : `${a}:${port}`
+}
+
+function rawHeaderBytes(res) {
+  let n = Buffer.byteLength(`HTTP/${res.httpVersion} ${res.statusCode} ${res.statusMessage || ''}\r\n`) + 2
+  for (let i = 0; i < res.rawHeaders.length; i += 2) n += Buffer.byteLength(`${res.rawHeaders[i]}: ${res.rawHeaders[i + 1]}\r\n`)
+  return n
+}
+
+function handleTiming(req, res) {
+  const id = new URL(req.url, 'http://x').searchParams.get('id')
+  const entry = timings.get(id)
+  if (!entry) return fail(res, 404, 'No timing for that request')
+  timings.delete(id)
+  res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' })
+  res.end(JSON.stringify({ timing: entry.timing || null, size: entry.size || null, network: entry.network }))
+}
 
 // ---- gRPC over HTTP/2 -------------------------------------------------------------
 // The browser sends { target: 'host:port', tls, path: '/pkg.Service/Method', metadata: [{key,value}],
