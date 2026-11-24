@@ -14,7 +14,7 @@ Stack: Vue 3 + Vite, Tailwind CSS v4, CodeMirror 6, Dexie.js, `@supabase/supabas
 ```bash
 npm install
 npm run dev        # http://localhost:5173 (local mode, no login)
-npm test           # unit tests: cURL parser, URL/params, variables, Postman import/export, snippets
+npm test           # unit tests: cURL parser, URL/params, variables, Postman/OpenAPI import, OAuth, snippets
 npm run build
 ```
 
@@ -71,6 +71,7 @@ netlify dev        # runs Vite + edge functions at /api/proxy and /mock/*
 | **Agent Mode** (like Postman's Desktop Agent): requests go through the Curlion Agent on your computer, so they reach localhost / your local network, skip CORS and can set Cookie/Host/User-Agent | ✅ |
 | Live sidebar search (name/folder/URL), request history: clicking an entry opens the request exactly as it was sent (method, URL, params, headers, auth, body) in a tab, to resend, edit or **Save to collection** | ✅ |
 | Import Postman Collection v2.1 (folders, auth, body, saved responses → samples, variables → environment); collection and folder auth stay inherited | ✅ |
+| **Import OpenAPI 3.x / Swagger 2.0** (JSON or YAML; file, paste or URL fetched through the current send mode): operations become requests in folders by tag; path params become `{{name}}`; query/header params, JSON / form / multipart bodies and response samples get example values (from `example(s)`, `default`, `enum`, or generated from the schema, following local `$ref`s); the server URL becomes `{{baseUrl}}` in a new environment that is selected; the security scheme (Bearer, Basic, API key, OAuth 2.0) becomes the collection's auth, with secrets as `{{variables}}` | ✅ |
 | Export a collection to Postman v2.1 JSON | ✅ |
 | Environments + Globals, switcher, `{{var}}` green/red highlighting + value on hover, `{{` autocomplete | ✅ |
 | **Inline variable editing** (like Postman): click a `{{var}}` in any field to edit its current / initial value, add an undefined one to the active environment or Globals, or see what a dynamic variable generates | ✅ |
@@ -130,6 +131,7 @@ src/
     http.js             fetch engine (direct/proxy), binary detection
     curl.js             cURL parser
     postman.js          Postman v2.1 import/export
+    openapi.js          OpenAPI 3.x / Swagger 2.0 import (loaded on demand with the YAML parser)
     snippets.js         code snippet generator
     cm.js               CodeMirror extensions (variable highlighting & autocomplete)
     activity.js         tree diff → activity log entries

@@ -466,3 +466,161 @@ test('OAuth: resolveRequest adds the token, snippets get a placeholder; Postman 
   col.items.push(newRequest('r'))
   assert.equal(buildDocsSnapshot(col).items[0].auth.oauth2.clientSecret, '<client-secret>')
 })
+
+// ---- OpenAPI / Swagger import -----------------------------------------------------
+import { importOpenApi, isOpenApi, parseSpecText } from '../src/lib/openapi.js'
+
+const PETSTORE_YAML = `
+openapi: 3.0.3
+info:
+  title: Pets
+  version: 1.2.0
+  description: Pet API
+servers:
+  - url: https://{env}.pets.test/v1
+    variables:
+      env: { default: api }
+security:
+  - bearer: []
+tags:
+  - name: pets
+paths:
+  /pets:
+    get:
+      tags: [pets]
+      summary: List pets
+      parameters:
+        - { name: limit, in: query, required: true, schema: { type: integer, default: 20 } }
+        - { name: q, in: query, schema: { type: string } }
+        - { name: X-Request-Id, in: header, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/Pet' } }
+    post:
+      tags: [pets]
+      operationId: createPet
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Pet' }
+      responses: { '201': { description: Created } }
+  /pets/{petId}:
+    parameters:
+      - { name: petId, in: path, required: true, description: The id, schema: { type: string } }
+    get:
+      tags: [pets]
+      summary: Get a pet
+      responses: { '404': { description: Not found } }
+  /health:
+    get:
+      summary: Health
+      security: []
+      responses: { '200': { description: OK } }
+  /upload:
+    post:
+      summary: Upload
+      security: [ { key: [] } ]
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file: { type: string, format: binary }
+                note: { type: string, example: hi }
+      responses: { '200': { description: OK } }
+components:
+  securitySchemes:
+    bearer: { type: http, scheme: bearer }
+    key: { type: apiKey, name: X-Key, in: header }
+  schemas:
+    Pet:
+      type: object
+      required: [name]
+      properties:
+        id: { type: integer, readOnly: true, example: 7 }
+        name: { type: string, example: Rex }
+        tags: { type: array, items: { type: string } }
+        parent: { $ref: '#/components/schemas/Pet' }
+`
+
+test('OpenAPI 3 (YAML): folders, baseUrl, params, bodies, samples and auth', () => {
+  const spec = parseSpecText(PETSTORE_YAML)
+  assert.ok(isOpenApi(spec))
+  const { collection: col, environment: env, warnings } = importOpenApi(PETSTORE_YAML)
+  assert.equal(col.name, 'Pets')
+  assert.equal(env.variables.find((v) => v.key === 'baseUrl').value, 'https://api.pets.test/v1')
+  assert.ok(env.variables.find((v) => v.key === 'bearerToken').isSecret)
+  assert.equal(col.auth.type, 'bearer')
+  assert.equal(col.auth.bearer.token, '{{bearerToken}}')
+
+  const [pets, health, upload] = col.items
+  assert.equal(pets.type, 'folder')
+  assert.equal(pets.name, 'pets')
+  const [list, create, get] = pets.items
+  assert.equal(list.url, '{{baseUrl}}/pets?limit=20')
+  assert.deepEqual(list.params.map((p) => [p.key, p.value, p.enabled]), [['limit', '20', true], ['q', '', false]])
+  assert.equal(list.headers[0].key, 'X-Request-Id')
+  assert.equal(list.auth.type, 'inherit')
+  const sample = JSON.parse(list.samples[0].body)
+  assert.equal(sample[0].name, 'Rex')
+  assert.equal(sample[0].id, 7) // readOnly is kept in responses
+  assert.equal(create.name, 'createPet')
+  assert.deepEqual(Object.keys(JSON.parse(create.body.raw)), ['name', 'tags']) // readOnly id left out; the recursive parent is dropped
+  assert.equal(get.url, '{{baseUrl}}/pets/{{petId}}')
+  assert.match(get.description, /petId \(string\): The id/)
+  assert.equal(health.auth.type, 'none')
+  assert.equal(upload.auth.type, 'apikey')
+  assert.equal(upload.auth.apikey.key, 'X-Key')
+  assert.deepEqual(upload.body.formData.map((f) => [f.key, f.type, f.value]), [['file', 'file', ''], ['note', 'text', 'hi']])
+  assert.deepEqual(warnings, [])
+})
+
+test('Swagger 2.0 (JSON): host/basePath, body and form params, OAuth 2.0 promoted to the collection', () => {
+  const spec = {
+    swagger: '2.0',
+    info: { title: 'Legacy', version: '1' },
+    host: 'legacy.test',
+    basePath: '/api/',
+    schemes: ['http', 'https'],
+    securityDefinitions: { oa: { type: 'oauth2', flow: 'application', tokenUrl: 'https://id.test/token', scopes: { read: 'Read', write: 'Write' } } },
+    paths: {
+      '/items': {
+        post: {
+          security: [{ oa: ['write'] }],
+          parameters: [{ in: 'body', name: 'body', schema: { type: 'object', properties: { n: { type: 'number', minimum: 1 } } } }],
+          responses: { 200: { description: 'ok', schema: { type: 'object', properties: { ok: { type: 'boolean' } } } } },
+        },
+        put: {
+          security: [{ oa: ['write'] }],
+          consumes: ['application/x-www-form-urlencoded'],
+          parameters: [{ in: 'formData', name: 'a', type: 'string', default: 'x' }],
+          responses: {},
+        },
+        get: { parameters: [{ in: 'query', name: 'page', type: 'integer', required: true }], responses: {} },
+      },
+    },
+  }
+  const { collection: col, environment: env } = importOpenApi(JSON.stringify(spec))
+  assert.equal(env.variables.find((v) => v.key === 'baseUrl').value, 'https://legacy.test/api')
+  assert.equal(col.auth.type, 'oauth2')
+  assert.equal(col.auth.oauth2.grantType, 'client_credentials')
+  assert.equal(col.auth.oauth2.tokenUrl, 'https://id.test/token')
+  assert.equal(col.auth.oauth2.scope, 'write')
+  const [get, post, put] = col.items
+  assert.deepEqual(JSON.parse(post.body.raw), { n: 1 })
+  assert.equal(post.auth.type, 'inherit')
+  assert.deepEqual(JSON.parse(post.samples[0].body), { ok: true })
+  assert.deepEqual(put.body.urlencoded.map((f) => [f.key, f.value]), [['a', 'x']])
+  assert.equal(get.url, '{{baseUrl}}/items?page=0')
+  assert.equal(get.auth.type, 'none') // not secured while the others are
+})
+
+test('OpenAPI import errors', () => {
+  assert.throws(() => importOpenApi('{"info":{}}'), /does not look like an OpenAPI/)
+  assert.throws(() => importOpenApi('openapi: 4.0.0\npaths: {}'), /not supported/)
+  assert.throws(() => parseSpecText(': : :\n  - ['), /not valid JSON or YAML/)
+})
