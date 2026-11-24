@@ -36,7 +36,7 @@ function flatten(items, map = new Map(), path = []) {
 const same = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null)
 const where = (path) => (path.length ? path.join(' / ') : '')
 
-const SECTIONS = ['params', 'headers', 'auth', 'body', 'extract', 'description']
+const SECTIONS = ['params', 'headers', 'auth', 'body', 'extract', 'tests', 'description']
 
 /** @returns {{ action, target_name, metadata }[]} */
 export function diffTrees(oldItems, newItems) {

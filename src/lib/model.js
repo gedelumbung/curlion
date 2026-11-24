@@ -98,6 +98,7 @@ export function newRequest(name = 'New Request', patch = {}) {
       urlencoded: [],
     },
     extract: [], // { id, path, variable, enabled }
+    tests: [], // { id, enabled, source, property, op, expected } see lib/assertions.js
     samples: [], // { id, name, status, headers: kv[], body }
     ...patch,
   }

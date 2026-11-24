@@ -17,6 +17,7 @@ import CodeModal from './components/CodeModal.vue'
 import LoginScreen from './components/LoginScreen.vue'
 import CollectionModal from './components/CollectionModal.vue'
 import ContainerSettingsModal from './components/ContainerSettingsModal.vue'
+import RunnerModal from './components/RunnerModal.vue'
 import ActivityDashboard from './components/ActivityDashboard.vue'
 import AgentModal from './components/AgentModal.vue'
 import AboutModal from './components/AboutModal.vue'
@@ -27,7 +28,7 @@ import VarPopover from './components/VarPopover.vue'
 import WorkspaceSwitcher from './components/WorkspaceSwitcher.vue'
 import { activeOverview, activeRequest, addNewRequest, checkAgent, cloudEnabled, init, openTabs, saveNow, send, setActiveEnv, setMode, signOut, state, wsEnvironments } from './store.js'
 
-const modal = ref(null) // env | import | code | collection | activity | agent | about | settings
+const modal = ref(null) // env | import | code | collection | container | runner | activity | agent | about | settings
 const collectionCtx = ref(null) // { col, tab }
 function openCollection(ctx) {
   collectionCtx.value = ctx
@@ -38,6 +39,12 @@ const containerCtx = ref(null)
 function openContainer(ctx) {
   containerCtx.value = { tab: 'auth', ...ctx }
   modal.value = 'container'
+}
+// Collection Runner: { col, node } (node: folder or null)
+const runnerCtx = ref(null)
+function openRunner(ctx) {
+  runnerCtx.value = ctx
+  modal.value = 'runner'
 }
 const sidebarOpen = ref(true)
 
@@ -232,7 +239,7 @@ const syncLabel = {
     </header>
 
     <div :inert="!!modal" class="flex min-h-0 flex-1" :class="{ 'select-none': dragging, 'cursor-col-resize': dragging === 'sidebar', 'cursor-row-resize': dragging === 'split' }">
-      <Sidebar v-show="sidebarOpen" class="shrink-0" :style="{ width: sidebarWidth + 'px' }" @import="modal = 'import'" @collection="openCollection" @settings="openContainer" />
+      <Sidebar v-show="sidebarOpen" class="shrink-0" :style="{ width: sidebarWidth + 'px' }" @import="modal = 'import'" @collection="openCollection" @settings="openContainer" @run="openRunner" />
       <div
         v-show="sidebarOpen"
         class="relative z-10 -ml-1 w-1 shrink-0 cursor-col-resize transition-colors hover:bg-orange-500/60"
@@ -257,7 +264,7 @@ const syncLabel = {
           <MessageLog v-if="activeRequest.protocol === 'ws' || activeRequest.protocol === 'socketio'" :key="'log' + activeRequest.id" class="min-h-0 flex-1" />
           <ResponseViewer v-else :key="activeRequest.id" class="min-h-0 flex-1" />
         </div>
-        <CollectionOverview v-else-if="activeOverview" :key="activeOverview.id" :collection="activeOverview" @collection="openCollection" @settings="openContainer" />
+        <CollectionOverview v-else-if="activeOverview" :key="activeOverview.id" :collection="activeOverview" @collection="openCollection" @settings="openContainer" @run="openRunner" />
         <div v-else class="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center text-zinc-500">
           <CurlionLogo class="h-12 w-12 text-zinc-100 opacity-60" />
           <p>Select a request from the sidebar, or</p>
@@ -292,6 +299,7 @@ const syncLabel = {
       @open="(col, node) => openContainer({ col, node })"
       @close="modal = null"
     />
+    <RunnerModal v-if="modal === 'runner'" :collection="runnerCtx.col" :folder="runnerCtx.node" @close="modal = null" />
     <CollectionModal v-if="modal === 'collection'" :collection="collectionCtx.col" :initial-tab="collectionCtx.tab" @close="modal = null" />
 
     <!-- Toasts: top layer, re-shown for each new toast so they sit above any open modal -->

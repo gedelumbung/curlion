@@ -38,7 +38,7 @@
       "url": "https://curlion-app.netlify.app/landing/",
       "applicationCategory": "DeveloperApplication",
       "operatingSystem": "Any (web browser)",
-      "description": "Free, local-first API client for your browser. Send REST, GraphQL, WebSocket, Socket.IO and gRPC requests, share environments with your team, import Postman collections and publish API docs.",
+      "description": "Free, local-first API client for your browser. Send REST, GraphQL, WebSocket, Socket.IO and gRPC requests, share environments with your team, import Postman collections and OpenAPI specs, test responses and publish API docs.",
       "alternateName": "Curlion API client",
       "offers": {
         "@type": "Offer",
@@ -60,6 +60,7 @@
         "Collection and folder auth and headers, inherited by every request inside",
         "OAuth 2.0: authorization code with PKCE and client credentials, with automatic token refresh",
         "Team workspaces with shared environments",
+        "Response tests without scripts and a Collection Runner",
         "Code snippets for cURL, JavaScript, PHP, Go and Python",
         "Published read-only API documentation",
         "Eight themes, dark and light"
@@ -82,7 +83,7 @@
           "name": "Is Curlion a good Postman alternative?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Curlion covers the everyday Postman workflow: collections and folders, environments and variables, auth (including OAuth 2.0, set once per collection or folder), request bodies, a response viewer, history, tabs, cURL and Postman import/export, code snippets and published docs. It runs in the browser and stores data locally by default. It does not run Postman's pre-request and test scripts (they are skipped on import); Post-Response extraction handles token chaining. If your workflow depends on scripting, check that first."
+            "text": "Curlion covers the everyday Postman workflow: collections and folders, environments and variables, auth (including OAuth 2.0, set once per collection or folder), request bodies, a response viewer, tests and a Collection Runner, history, tabs, cURL and Postman import/export, code snippets and published docs. It runs in the browser and stores data locally by default. It does not run Postman's pre-request and test scripts (they are skipped on import). Instead, response tests are built without code (status, JSON path, headers, response time), the Collection Runner sends a whole collection and reports what passed, and Post-Response extraction handles token chaining. If your workflow depends on custom scripting, check that first."
           }
         },
         {
@@ -378,7 +379,7 @@
           <span class="eyebrow"><i></i> Free API client · Local-first · Team-ready</span>
           <h1>An API client that doesn’t need a <em>jet engine.</em></h1>
           <p class="lede">
-            Curlion is a fast, browser-based API client. Import your cURLs and Postman collections, test endpoints, and clock out on time — without your laptop fans preparing for takeoff.
+            Curlion is a fast, browser-based API client. Import your cURLs, Postman collections and OpenAPI specs, test endpoints, and clock out on time — without your laptop fans preparing for takeoff.
           </p>
           <div class="cta">
             <a class="btn btn-primary" href="https://curlion-app.netlify.app/">Open Curlion</a>
@@ -470,6 +471,11 @@
               <span class="ico"><svg viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z" /><path d="M14 2v4a2 2 0 0 0 2 2h4" /><path d="m10 13-2 2 2 2" /><path d="m14 17 2-2-2-2" /></svg></span>
               <h3>OpenAPI in, collection out</h3>
               <p>Import an OpenAPI 3 or Swagger 2 file or URL. Every operation becomes a ready-to-send request with example params, bodies and responses.</p>
+            </article>
+            <article class="card">
+              <span class="ico"><svg viewBox="0 0 24 24"><path d="M21.801 10A10 10 0 1 1 17 3.335" /><path d="m9 11 3 3L22 4" /></svg></span>
+              <h3>Tests without scripts</h3>
+              <p>Check status, JSON paths, headers and response time with a few clicks, then run a whole collection and see what passed.</p>
             </article>
           </div>
         </div>
@@ -622,7 +628,7 @@
           <div class="alts">
             <article class="card">
               <h3>Postman alternative</h3>
-              <p>Import your Postman Collection v2.1 files (folders, auth, bodies, saved responses and variables) and keep working with environments, history and published docs. Pre-request and test scripts aren&#x27;t supported, so use Post-Response extraction for token chaining.</p>
+              <p>Import your Postman Collection v2.1 files (folders, auth, bodies, saved responses and variables) and keep working with environments, history and published docs. Scripts aren&#x27;t run: use no-code tests and the Collection Runner for checks, and Post-Response extraction for token chaining.</p>
             </article>
             <article class="card">
               <h3>Insomnia alternative</h3>
@@ -718,7 +724,7 @@ VITE_SUPABASE_ANON_KEY</pre>
           <div class="faq">
             <details>
               <summary>Is Curlion a good Postman alternative?</summary>
-              <p>Curlion covers the everyday Postman workflow: collections and folders, environments and variables, auth (including OAuth 2.0, set once per collection or folder), request bodies, a response viewer, history, tabs, cURL and Postman import/export, code snippets and published docs. It runs in the browser and stores data locally by default. It does not run Postman&#x27;s pre-request and test scripts (they are skipped on import); Post-Response extraction handles token chaining. If your workflow depends on scripting, check that first.</p>
+              <p>Curlion covers the everyday Postman workflow: collections and folders, environments and variables, auth (including OAuth 2.0, set once per collection or folder), request bodies, a response viewer, tests and a Collection Runner, history, tabs, cURL and Postman import/export, code snippets and published docs. It runs in the browser and stores data locally by default. It does not run Postman&#x27;s pre-request and test scripts (they are skipped on import). Instead, response tests are built without code (status, JSON path, headers, response time), the Collection Runner sends a whole collection and reports what passed, and Post-Response extraction handles token chaining. If your workflow depends on custom scripting, check that first.</p>
             </details>
             <details>
               <summary>Can I import my Postman collections into Curlion?</summary>

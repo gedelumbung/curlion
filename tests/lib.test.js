@@ -624,3 +624,52 @@ test('OpenAPI import errors', () => {
   assert.throws(() => importOpenApi('openapi: 4.0.0\npaths: {}'), /not supported/)
   assert.throws(() => parseSpecText(': : :\n  - ['), /not valid JSON or YAML/)
 })
+
+// ---- Tests without scripts -----------------------------------------------------------
+import { checkTest, describeTest, newTest, runTests, summarize } from '../src/lib/assertions.js'
+
+test('assertions: status, time, JSON path, header, body, types and regex', () => {
+  const res = {
+    status: 201,
+    time: 120,
+    headers: [{ key: 'content-type', value: 'application/json; charset=utf-8' }],
+    body: '{"data":{"id":7,"tags":["a","b"],"ok":true,"owner":null,"items":[{"n":1}]}}',
+  }
+  res.json = JSON.parse(res.body)
+  const ok = (patch) => checkTest(newTest(patch), res).ok
+  assert.equal(ok({ source: 'status', op: 'eq', expected: '201' }), true)
+  assert.equal(ok({ source: 'status', op: 'eq', expected: '200' }), false)
+  assert.equal(ok({ source: 'status', op: 'matches', expected: '^2\\d\\d$' }), true)
+  assert.equal(ok({ source: 'time', op: 'lt', expected: '500' }), true)
+  assert.equal(ok({ source: 'time', op: 'gte', expected: 'abc' }), false)
+  assert.equal(ok({ source: 'json', property: 'data.id', op: 'eq', expected: '7' }), true)
+  assert.equal(ok({ source: 'json', property: '$.data.ok', op: 'eq', expected: 'true' }), true)
+  assert.equal(ok({ source: 'json', property: 'data.owner', op: 'type', expected: 'null' }), true)
+  assert.equal(ok({ source: 'json', property: 'data.tags', op: 'type', expected: 'array' }), true)
+  assert.equal(ok({ source: 'json', property: 'data.tags', op: 'contains', expected: 'b' }), true)
+  assert.equal(ok({ source: 'json', property: 'data.items', op: 'contains', expected: '{"n":1}' }), true)
+  assert.equal(ok({ source: 'json', property: 'data.items[0]', op: 'eq', expected: '{ "n": 1 }' }), true)
+  assert.equal(ok({ source: 'json', property: 'data.missing', op: 'not_exists' }), true)
+  assert.equal(ok({ source: 'json', property: 'data.id', op: 'exists' }), true)
+  assert.equal(ok({ source: 'json', property: 'data.id', op: 'gt', expected: '10' }), false)
+  assert.equal(ok({ source: 'header', property: 'Content-Type', op: 'contains', expected: 'json' }), true)
+  assert.equal(ok({ source: 'header', property: 'X-Nope', op: 'exists' }), false)
+  assert.equal(ok({ source: 'body', op: 'matches', expected: '/"ID":7/i' }), true)
+  assert.equal(checkTest(newTest({ source: 'body', op: 'matches', expected: '(' }), res).message.startsWith('invalid regex'), true)
+  assert.equal(checkTest(newTest({ source: 'json', property: 'x', op: 'eq', expected: '1' }), { ...res, json: undefined }).message, 'Response is not JSON')
+  assert.equal(describeTest(newTest({ source: 'json', property: 'data.id', op: 'exists' })), 'JSON data.id exists')
+})
+
+test('runTests: skips disabled and incomplete tests, resolves {{variables}} in expected values', () => {
+  const res = { status: 200, time: 5, headers: [], body: '{"id":"u1"}', json: { id: 'u1' } }
+  const tests = [
+    newTest({ source: 'json', property: 'id', op: 'eq', expected: '{{userId}}' }),
+    newTest({ enabled: false }),
+    newTest({ source: 'header', property: '', op: 'exists' }), // no header name: skipped
+    newTest({ source: 'status', op: 'eq', expected: '404' }),
+  ]
+  const out = runTests(tests, res, (s) => s.replace('{{userId}}', 'u1'))
+  assert.deepEqual(out.map((r) => r.ok), [true, false])
+  assert.equal(out[0].name, 'JSON id equals u1')
+  assert.deepEqual(summarize(out), { passed: 1, failed: 1, total: 2 })
+})

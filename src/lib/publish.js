@@ -27,6 +27,7 @@ export function sanitizeRequest(req) {
   if (r.grpc) delete r.grpc.proto
   // drop things that only matter inside the editor
   delete r.extract
+  delete r.tests
   // keep only enabled rows
   r.params = (r.params || []).filter((x) => x.enabled !== false)
   r.headers = (r.headers || []).filter((x) => x.enabled !== false).map(({ source, sourceId, ...h }) => h)

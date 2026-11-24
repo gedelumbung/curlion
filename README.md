@@ -78,6 +78,8 @@ netlify dev        # runs Vite + edge functions at /api/proxy and /mock/*
 | **Shared environments** (like Postman): initial values are shared with the team; each user's current values (e.g. extracted tokens) stay in their browser and are never synced. Globals stay private | ✅ |
 | Dynamic vars: `$uuid`, `$guid`, `$timestamp`, `$isoTimestamp`, `$randomInt`, `$randomEmail` | ✅ |
 | Post-Response Extract (JSON path → your current value of an environment variable), token chaining | ✅ |
+| **Tests without scripts** (request → *Tests* tab, HTTP and GraphQL): status code, JSON path, header, response time or body text; equals / not equal, less / greater than, contains, matches regex, exists, is of type; `{{variables}}` in expected values; presets for common checks. Results show in the response pane (*Tests 3/4*) after every send | ✅ |
+| **Collection Runner** (sidebar menu → *Run collection* / *Run folder*, or *Run* on the collection overview): sends the saved requests in sidebar order (pick which ones), with iterations, a delay and stop-at-first-failure; Post-Response values are set as it goes, so requests can chain; live pass/fail per request with failed tests, errors and response body; JSON report export. WebSocket, Socket.IO and gRPC requests are skipped | ✅ |
 | Paste cURL into the URL bar / Import → Raw cURL | ✅ |
 | Code snippets: cURL, fetch, Axios, PHP cURL, Guzzle, Go net/http, Python requests | ✅ |
 | Sample / example responses + mock URL `/mock/<collection_id>/<sample_id>` | ✅ |
@@ -120,7 +122,7 @@ Per collection from the sidebar menu (right-click or `⋯`): **Publish docs** an
 
 ```
 src/
-  store.js              state, IndexedDB persistence, Supabase sync, send + extract
+  store.js              state, IndexedDB persistence, Supabase sync, send + tests + extract, OAuth tokens, Collection Runner
   db/index.js           Dexie schema (+ one-time migration from the old "echo"/"postlite" databases)
   lib/
     model.js            data factories (collection/folder/request/sample/env)
@@ -135,6 +137,7 @@ src/
     snippets.js         code snippet generator
     cm.js               CodeMirror extensions (variable highlighting & autocomplete)
     activity.js         tree diff → activity log entries
+    assertions.js       no-code response tests
     publish.js          docs snapshot + secret sanitizing, slug
     theme.js            light/dark theme
   components/           UI (Sidebar, RequestEditor, ResponseViewer, modals)

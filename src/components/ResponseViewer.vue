@@ -1,6 +1,6 @@
 <script setup>
-import { computed, ref } from 'vue'
-import { AlertTriangle, Check, Copy, Download, FileDown, Save, WrapText } from 'lucide-vue-next'
+import { computed, ref, watch } from 'vue'
+import { AlertTriangle, Check, Copy, Download, FileDown, Save, WrapText, X } from 'lucide-vue-next'
 import CodeEditor from './CodeEditor.vue'
 import JsonTree from './JsonTree.vue'
 import { activeError, activeLoading, activeRequest, activeResponse, addSampleNow, isHistoryId, state, toast } from '../store.js'
@@ -8,6 +8,7 @@ import { kv, newSample } from '../lib/model.js'
 import { linkParts } from '../lib/links.js'
 import { copyText, formatSize, statusColor } from '../lib/ui.js'
 import { saveResponseFile } from '../lib/http.js'
+import { summarize } from '../lib/assertions.js'
 import { indentString } from '../lib/settings.js'
 
 const res = activeResponse
@@ -27,6 +28,9 @@ const pretty = computed(() => {
 })
 
 const wrapVar = (name) => '{' + '{' + name + '}' + '}'
+const testSummary = computed(() => (res.value?.tests?.length ? summarize(res.value.tests) : null))
+const tabs = computed(() => ['body', 'headers', ...(testSummary.value ? ['tests'] : [])])
+watch(testSummary, (s) => !s && tab.value === 'tests' && (tab.value = 'body'))
 
 async function saveAgain() {
   const r = res.value
@@ -58,8 +62,9 @@ function saveAsSample() {
       <span class="font-medium text-zinc-300">Response</span>
       <template v-if="res">
         <nav class="flex gap-1 text-xs">
-          <button v-for="t in ['body', 'headers']" :key="t" class="rounded px-2 py-1 capitalize" :class="tab === t ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'" @click="tab = t">
+          <button v-for="t in tabs" :key="t" class="rounded px-2 py-1 capitalize" :class="tab === t ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'" @click="tab = t">
             {{ t }}<span v-if="t === 'headers'" class="ml-1 text-zinc-500">{{ res.headers.length }}</span>
+            <span v-if="t === 'tests'" class="ml-1" :class="testSummary.failed ? 'text-red-400' : 'text-emerald-400'">{{ testSummary.passed }}/{{ testSummary.total }}</span>
           </button>
         </nav>
         <span class="ml-auto font-mono text-xs" :class="statusColor(res.status, res.grpc)" :title="res.grpc && res.message ? res.message : undefined">{{ res.status }} {{ res.statusText }}</span>
@@ -120,6 +125,16 @@ function saveAsSample() {
           </div>
         </div>
       </template>
+
+      <ul v-else-if="tab === 'tests' && res.tests?.length" class="divide-y divide-zinc-800 text-sm">
+        <li v-for="t in res.tests" :key="t.id" class="flex items-start gap-2 px-4 py-2">
+          <Check v-if="t.ok" :size="15" class="mt-0.5 shrink-0 text-emerald-400" /><X v-else :size="15" class="mt-0.5 shrink-0 text-red-400" />
+          <span class="min-w-0 flex-1">
+            <span :class="t.ok ? 'text-zinc-200' : 'text-red-300'">{{ t.name }}</span>
+            <span class="ml-2 font-mono text-xs break-all text-zinc-500">{{ t.message }}</span>
+          </span>
+        </li>
+      </ul>
 
       <table v-else class="w-full text-sm">
         <tbody>

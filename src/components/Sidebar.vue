@@ -1,6 +1,6 @@
 <script setup>
 import { computed, nextTick, ref } from 'vue'
-import { ChevronRight, Clock, Copy, Download, FilePlus, FolderPlus, Globe, History, KeyRound, Layers, MoreHorizontal, Pencil, Plus, Search, Trash2, Upload, Users } from 'lucide-vue-next'
+import { ChevronRight, Clock, Copy, Download, FilePlus, FolderPlus, Globe, History, KeyRound, Layers, MoreHorizontal, Pencil, Play, Plus, Search, Trash2, Upload, Users } from 'lucide-vue-next'
 import TreeNode from './TreeNode.vue'
 import {
   addNewRequest,
@@ -27,7 +27,7 @@ import { vTopLayer } from '../lib/topLayer.js'
 import { exportPostman } from '../lib/postman.js'
 import { downloadJson, methodColor, statusColor } from '../lib/ui.js'
 
-const emit = defineEmits(['import', 'collection', 'settings']) // settings: ({ col, node }) auth & headers
+const emit = defineEmits(['import', 'collection', 'settings', 'run']) // settings / run: ({ col, node }) auth & headers, Collection Runner
 const tab = ref('collections')
 const renamingId = ref(null)
 const menu = ref(null) // { x, y, items }
@@ -49,7 +49,7 @@ function colVisible(col) {
 function openMenu(e, col, node = null) {
   const rect = e.currentTarget?.getBoundingClientRect?.()
   const x = Math.min(e.clientX || rect?.left || 0, window.innerWidth - 200)
-  const y = Math.min(e.clientY || rect?.bottom || 0, window.innerHeight - 260)
+  const y = Math.min(e.clientY || rect?.bottom || 0, window.innerHeight - 320)
   const isContainer = !node || node.type === 'folder'
   const parentId = node ? node.id : col.id
   const items = []
@@ -62,6 +62,7 @@ function openMenu(e, col, node = null) {
     items.push({ icon: FilePlus, label: 'Add request', run: () => addRequest(col, parentId) })
     items.push({ icon: FolderPlus, label: 'Add folder', run: () => startRename(addFolder(col, parentId).id) })
     items.push({ icon: KeyRound, label: 'Auth & headers', run: () => emit('settings', { col, node }) })
+    items.push({ icon: Play, label: node ? 'Run folder' : 'Run collection', run: () => emit('run', { col, node: node || null }) })
   }
   items.push({ icon: Pencil, label: 'Rename', run: () => (node ? startRename(node.id) : beginColRename(col)) })
   if (node) {

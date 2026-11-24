@@ -158,7 +158,7 @@ export function importPostman(json) {
     warnings.push('OAuth 2.0 password and implicit grants are not supported; those requests were set to the authorization code grant.')
   }
   if (data.event?.length || JSON.stringify(data.item).includes('"event"')) {
-    warnings.push('Pre-request/test scripts are not supported and were skipped. Use the Extract tab instead.')
+    warnings.push('Pre-request and test scripts are not run and were skipped. Use the Tests tab for checks and Post-Response for token chaining.')
   }
 
   let environment = null

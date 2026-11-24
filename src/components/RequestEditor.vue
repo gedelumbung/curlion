@@ -8,6 +8,7 @@ import KeyValueEditor from './KeyValueEditor.vue'
 import CodeEditor from './CodeEditor.vue'
 import SamplesPanel from './SamplesPanel.vue'
 import AuthEditor from './AuthEditor.vue'
+import TestsPanel from './TestsPanel.vue'
 import GraphqlPanel from './GraphqlPanel.vue'
 import RealtimePanel from './RealtimePanel.vue'
 import GrpcPanel from './GrpcPanel.vue'
@@ -230,6 +231,7 @@ const counts = computed(() => {
     body: r.body.mode !== 'none' ? '•' : '',
     auth: r.auth.type !== 'none' && r.auth.type !== 'inherit' ? '•' : '',
     extract: r.extract.filter((x) => x.enabled !== false && x.path).length,
+    tests: (r.tests || []).filter((x) => x.enabled !== false).length,
     samples: r.samples.length,
     docs: r.description ? '•' : '',
   }
@@ -241,6 +243,7 @@ const T = {
   headers: { id: 'headers', label: 'Headers' },
   body: { id: 'body', label: 'Body' },
   extract: { id: 'extract', label: 'Post-Response' },
+  tests: { id: 'tests', label: 'Tests' },
   samples: { id: 'samples', label: 'Samples / Mock' },
   docs: { id: 'docs', label: 'Docs' },
   query: { id: 'query', label: 'Query' },
@@ -252,8 +255,8 @@ const T = {
   proto: { id: 'proto', label: 'Proto' },
 }
 const TABS = {
-  http: ['params', 'auth', 'headers', 'body', 'extract', 'samples', 'docs'],
-  graphql: ['query', 'variables', 'schema', 'headers', 'auth', 'extract', 'docs'],
+  http: ['params', 'auth', 'headers', 'body', 'tests', 'extract', 'samples', 'docs'],
+  graphql: ['query', 'variables', 'schema', 'headers', 'auth', 'tests', 'extract', 'docs'],
   ws: ['message', 'params', 'headers', 'auth', 'settings', 'docs'],
   socketio: ['message', 'headers', 'settings', 'docs'],
   grpc: ['message', 'metadata', 'auth', 'proto', 'settings', 'docs'],
@@ -471,6 +474,9 @@ defineExpose({ applyCurl })
           <Plus :size="14" /> Add rule
         </button>
       </div>
+
+      <!-- Tests -->
+      <TestsPanel v-else-if="tab === 'tests'" :request="req" :results="activeResponse?.tests || null" />
 
       <!-- Samples / mock -->
       <SamplesPanel v-else-if="tab === 'samples'" :request="req" />

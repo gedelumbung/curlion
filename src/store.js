@@ -25,6 +25,7 @@ import { GRPC_STATUS, decodeMessage, encodeMessage, findMethod, parseProto } fro
 import { indentString } from './lib/settings.js'
 import { collectionToRow, environmentToRow, rowToCollection, rowToEnvironment, rowToWorkspace, supabase } from './lib/supabase.js'
 import { countRequests, diffTrees } from './lib/activity.js'
+import { runTests, summarize } from './lib/assertions.js'
 import { buildDocsSnapshot } from './lib/publish.js'
 
 const SAVE_DELAY = 300 // IndexedDB write debounce
@@ -1128,35 +1129,15 @@ export async function send({ download = false } = {}) {
   controllers.set(id, controller)
   state.pending[id] = true
   delete state.errors[id]
-  let resolved
   try {
-    let oauth
-    ;({ resolved, oauth } = await prepareRequest(req))
     if (protocol === 'grpc') {
+      const { resolved } = await prepareRequest(req)
       const res = await invokeGrpc(req, resolved, controller.signal)
       state.responses[id] = res
       addHistory(req, { method: 'GRPC', url: `${resolved.url}${res.grpcPath}` }, res)
       return
     }
-    if (protocol === 'graphql') {
-      try {
-        JSON.parse(resolved.body.raw)
-      } catch {
-        throw new Error('Variables are not valid JSON (after replacing {{variables}}). Check the Variables tab.')
-      }
-    }
-    if (state.mode === 'proxy' && /^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])/i.test(resolved.url)) {
-      throw new Error('localhost cannot be reached through the cloud proxy. Use Agent mode (runs requests from your computer), or Direct mode with CORS enabled on your local server.')
-    }
-    let res = await sendRequest(resolved, { mode: state.mode, agentPort: state.agent.port, download, signal: controller.signal })
-    // OAuth 2.0: the token may have been revoked or expired early; get a fresh one and retry once
-    if (res.status === 401 && canRetryOAuth(oauth)) {
-      ;({ resolved } = await prepareRequest(req, { forceToken: true }))
-      res = await sendRequest(resolved, { mode: state.mode, agentPort: state.agent.port, download, signal: controller.signal })
-    }
-    if (state.mode === 'agent') state.agent.status = 'online'
-    res.at = Date.now()
-    res.extracted = runExtract(req, res)
+    const { res, resolved } = await executeHttp(req, { download, signal: controller.signal })
     const prev = state.responses[id]?.downloadUrl
     if (prev && prev !== res.downloadUrl) URL.revokeObjectURL(prev)
     state.responses[id] = res
@@ -1175,6 +1156,102 @@ export async function send({ download = false } = {}) {
       delete state.pending[id]
     }
   }
+}
+
+/**
+ * Send an HTTP or GraphQL request as the editor and the Collection Runner do: inherited
+ * auth / headers, OAuth 2.0 token (one retry with a fresh token on 401), then the request's
+ * tests and Post-Response extraction.
+ * @returns {{ res, resolved }} res also carries .tests and .extracted
+ */
+export async function executeHttp(req, { collectionId, download = false, saveBinary = true, signal } = {}) {
+  let { resolved, oauth } = await prepareRequest(req, { collectionId })
+  if (protocolOf(req) === 'graphql') {
+    try {
+      JSON.parse(resolved.body.raw)
+    } catch {
+      throw new Error('Variables are not valid JSON (after replacing {{variables}}). Check the Variables tab.')
+    }
+  }
+  if (state.mode === 'proxy' && /^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])/i.test(resolved.url)) {
+    throw new Error('localhost cannot be reached through the cloud proxy. Use Agent mode (runs requests from your computer), or Direct mode with CORS enabled on your local server.')
+  }
+  const opts = { mode: state.mode, agentPort: state.agent.port, download, saveBinary, signal }
+  let res = await sendRequest(resolved, opts)
+  // OAuth 2.0: the token may have been revoked or expired early; get a fresh one and retry once
+  if (res.status === 401 && canRetryOAuth(oauth)) {
+    ;({ resolved } = await prepareRequest(req, { collectionId, forceToken: true }))
+    res = await sendRequest(resolved, opts)
+  }
+  if (state.mode === 'agent') state.agent.status = 'online'
+  res.at = Date.now()
+  res.tests = runTests(req.tests, res, (v) => interpolate(v, scope.value))
+  res.extracted = runExtract(req, res)
+  return { res, resolved }
+}
+
+// ---- Collection Runner ------------------------------------------------------------
+
+/**
+ * Requests under a collection or folder, in sidebar order, with the folder path.
+ * WebSocket, Socket.IO and gRPC requests are listed with `skip` (the runner sends HTTP and GraphQL).
+ */
+export function runnableRequests(col, folderId = null) {
+  const start = folderId ? findNode(col.items, folderId)?.node?.items || [] : col.items
+  const out = []
+  const visit = (items, path) => {
+    for (const n of items) {
+      if (n.type === 'folder') visit(n.items, [...path, n.name])
+      else {
+        const p = protocolOf(n)
+        out.push({ id: n.id, name: n.name, method: n.method, protocol: p, path: path.join(' / '), skip: p === 'http' || p === 'graphql' ? null : `${p === 'grpc' ? 'gRPC' : p === 'ws' ? 'WebSocket' : 'Socket.IO'} requests are not run` })
+      }
+    }
+  }
+  visit(start, [])
+  return out
+}
+
+const sleepFor = (ms, signal) =>
+  new Promise((resolve) => {
+    if (!ms || signal?.aborted) return resolve()
+    const t = setTimeout(resolve, ms)
+    signal?.addEventListener('abort', () => (clearTimeout(t), resolve()), { once: true })
+  })
+
+/**
+ * Run saved requests one after another, `iterations` times. Variables extracted by one
+ * request are available to the next. Requests are not added to History.
+ * @param ids request ids, in run order
+ * @param onResult called with each result as it arrives
+ * @returns {Promise<{ results, summary }>}
+ */
+export async function runCollection({ col, ids, iterations = 1, delay = 0, stopOnFail = false, signal, onResult = () => {} }) {
+  const results = []
+  const started = Date.now()
+  outer: for (let it = 1; it <= iterations; it++) {
+    for (const id of ids) {
+      if (signal?.aborted) break outer
+      const found = findRequest(id, col.id)
+      if (!found) continue
+      const req = clone(toRaw(found.node)) // the saved version: unsaved tab edits are not run
+      const r = { iteration: it, requestId: id, name: req.name, method: req.method, protocol: protocolOf(req), url: '', status: null, statusText: '', time: null, size: null, tests: [], extracted: [], error: null }
+      try {
+        if (!req.url.trim()) throw new Error('No URL')
+        const { res, resolved } = await executeHttp(req, { collectionId: col.id, saveBinary: false, signal })
+        Object.assign(r, { url: resolved.url, status: res.status, statusText: res.statusText, time: res.time, size: res.size, tests: res.tests, extracted: res.extracted, body: res.binary ? `(${res.contentType || 'binary'} response)` : (res.body || '').slice(0, 20_000) })
+      } catch (e) {
+        if (e.name === 'AbortError') break outer
+        r.error = e.message
+      }
+      results.push(r)
+      onResult(r)
+      if (stopOnFail && (r.error || r.tests.some((t) => !t.ok))) break outer
+      await sleepFor(delay, signal)
+    }
+  }
+  const tests = summarize(results.flatMap((r) => r.tests))
+  return { results, summary: { requests: results.length, errors: results.filter((r) => r.error).length, tests, duration: Date.now() - started, aborted: !!signal?.aborted } }
 }
 
 // ---- gRPC (through the Curlion Agent) -------------------------------------------

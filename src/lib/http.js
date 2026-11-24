@@ -179,10 +179,11 @@ function buildBody(body) {
 /**
  * Send a resolved request.
  * @param resolved output of resolveRequest()
- * @param opts { mode: 'direct'|'proxy'|'agent', agentPort, download: boolean, signal }
+ * @param opts { mode: 'direct'|'proxy'|'agent', agentPort, download: boolean, signal,
+ *   saveBinary: false to skip saving binary responses as files (Collection Runner) }
  */
 export async function sendRequest(resolved, opts = {}) {
-  const { mode = 'direct', download = false, signal, agentPort } = opts
+  const { mode = 'direct', download = false, signal, agentPort, saveBinary = true } = opts
   const relayed = mode === 'proxy' || mode === 'agent' // target info travels in X-Curlion-* headers
   const headers = new Headers()
   const body = buildBody(resolved.body)
@@ -269,6 +270,7 @@ export async function sendRequest(resolved, opts = {}) {
   if (download || isBinaryResponse(hdrs)) {
     result.binary = true
     result.fileName = withExtension(filenameFrom(hdrs, resolved.url), result.contentType)
+    if (!saveBinary) return result
     // kept so the response pane can offer "Download again" (a click there is a real user
     // gesture, which browsers never block, unlike this download after an await)
     result.downloadUrl = URL.createObjectURL(blob)
