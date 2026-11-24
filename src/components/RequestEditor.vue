@@ -7,18 +7,20 @@ import { indentString } from '../lib/settings.js'
 import KeyValueEditor from './KeyValueEditor.vue'
 import CodeEditor from './CodeEditor.vue'
 import SamplesPanel from './SamplesPanel.vue'
+import AuthEditor from './AuthEditor.vue'
 import GraphqlPanel from './GraphqlPanel.vue'
 import RealtimePanel from './RealtimePanel.vue'
 import GrpcPanel from './GrpcPanel.vue'
 import { parseProto } from '../lib/grpc.js'
-import { activeLoading, activeRequest, activeResponse, cancel, connectRealtime, disconnectRealtime, isDirty, isHistoryId, keepTab, persistDrafts, saveNow, send, state, toast } from '../store.js'
+import { activeLoading, activeRequest, activeResponse, ancestorsFor, cancel, connectRealtime, disconnectRealtime, isDirty, isHistoryId, keepTab, persistDrafts, saveNow, send, state, toast } from '../store.js'
 import { METHODS, PROTOCOLS, ensureProtocol, protocolOf, uid } from '../lib/model.js'
+import { inheritedHeaders } from '../lib/resolve.js'
 import { paramsFromUrl, urlFromParams } from '../lib/url.js'
 import { looksLikeCurl, parseCurl } from '../lib/curl.js'
 import { getByPath } from '../lib/variables.js'
 import { methodColor, requestBadge, STANDARD_HEADERS } from '../lib/ui.js'
 
-const emit = defineEmits(['show-code'])
+const emit = defineEmits(['show-code', 'container-settings']) // container-settings: ({ col, node, tab })
 const req = activeRequest
 const tab = ref('params')
 const sendMenu = ref(false)
@@ -86,16 +88,17 @@ const grpcMethod = computed({
 })
 
 const methodOptions = METHODS.map((m) => ({ value: m, label: m, class: `font-mono font-semibold ${methodColor[m]}` }))
-const AUTH_TYPES = [
-  { value: 'none', label: 'No Auth' },
-  { value: 'bearer', label: 'Bearer Token' },
-  { value: 'basic', label: 'Basic Auth' },
-  { value: 'apikey', label: 'API Key' },
-]
-const APIKEY_IN = [
-  { value: 'header', label: 'Header' },
-  { value: 'query', label: 'Query Params' },
-]
+
+// ---- Inherited auth / headers (collection -> folders -> request) -------------------
+const ancestors = computed(() => (req.value ? ancestorsFor(req.value.id) : []))
+const parentHeaders = computed(() => {
+  const own = new Set(req.value.headers.filter((h) => h.enabled !== false && h.key).map((h) => h.key.toLowerCase()))
+  return inheritedHeaders(ancestors.value).map((h) => ({ ...h, overridden: own.has(h.key.toLowerCase()) }))
+})
+function editContainer(node, tab = 'auth') {
+  const col = ancestors.value[0]
+  if (col) emit('container-settings', { col, node: node && node.id !== col.id ? node : null, tab })
+}
 const RAW_TYPES = ['json', 'text', 'xml', 'html'].map((v) => ({ value: v, label: v === 'text' ? 'Text' : v.toUpperCase(), class: 'text-sky-400' }))
 
 // ---- URL <-> Params two-way sync -----------------------------------------
@@ -225,7 +228,7 @@ const counts = computed(() => {
     variables: r.graphql?.variables?.trim() ? '•' : '',
     proto: r.grpc?.proto?.trim() ? '•' : '',
     body: r.body.mode !== 'none' ? '•' : '',
-    auth: r.auth.type !== 'none' ? '•' : '',
+    auth: r.auth.type !== 'none' && r.auth.type !== 'inherit' ? '•' : '',
     extract: r.extract.filter((x) => x.enabled !== false && x.path).length,
     samples: r.samples.length,
     docs: r.description ? '•' : '',
@@ -399,37 +402,25 @@ defineExpose({ applyCurl })
       </div>
 
       <!-- Auth -->
-      <div v-else-if="tab === 'auth'" class="grid gap-4 px-4 py-2 md:grid-cols-[200px_1fr]">
-        <div>
-          <label class="mb-1 block text-xs text-zinc-500">Type</label>
-          <UiSelect v-model="req.auth.type" :options="AUTH_TYPES" class="w-full" button-class="rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm" />
-        </div>
-        <div class="space-y-3 text-sm">
-          <p v-if="req.auth.type === 'none'" class="pt-5 text-zinc-500">This request does not use any authorization.</p>
-          <template v-if="req.auth.type === 'bearer'">
-            <label class="block text-xs text-zinc-500">Token</label>
-            <VarInput v-model="req.auth.bearer.token" placeholder="Token or a {{variable}}" class="field" />
-          </template>
-          <template v-if="req.auth.type === 'basic'">
-            <label class="block text-xs text-zinc-500">Username</label>
-            <VarInput v-model="req.auth.basic.username" class="field" />
-            <label class="block text-xs text-zinc-500">Password</label>
-            <VarInput v-model="req.auth.basic.password" class="field" masked />
-          </template>
-          <template v-if="req.auth.type === 'apikey'">
-            <label class="block text-xs text-zinc-500">Key</label>
-            <VarInput v-model="req.auth.apikey.key" placeholder="X-API-Key" class="field" />
-            <label class="block text-xs text-zinc-500">Value</label>
-            <VarInput v-model="req.auth.apikey.value" class="field" />
-            <label class="block text-xs text-zinc-500">Add to</label>
-            <UiSelect v-model="req.auth.apikey.in" :options="APIKEY_IN" class="w-36" />
-          </template>
-        </div>
+      <div v-else-if="tab === 'auth'" class="px-4 py-2">
+        <AuthEditor :holder="req" kind="request" :ancestors="ancestors" @edit-parent="editContainer" />
       </div>
 
       <!-- Headers -->
       <div v-else-if="tab === 'headers'">
         <KeyValueEditor :rows="req.headers" :key-suggestions="STANDARD_HEADERS" />
+        <div v-if="parentHeaders.length" class="mt-3 px-4">
+          <p class="mb-1 text-xs text-zinc-500">Inherited from the collection and folders</p>
+          <ul class="rounded border border-zinc-800 font-mono text-[13px]">
+            <li v-for="h in parentHeaders" :key="h.sourceId + h.key" class="flex items-center gap-3 border-t border-zinc-800 px-3 py-1.5 first:border-t-0" :class="{ 'opacity-50': h.overridden }">
+              <span class="w-1/3 truncate text-zinc-400" :class="{ 'line-through': h.overridden }">{{ h.key }}</span>
+              <span class="min-w-0 flex-1 truncate text-zinc-300">{{ h.value }}</span>
+              <button class="shrink-0 font-sans text-xs text-zinc-500 hover:text-orange-400" :title="h.overridden ? 'Overridden by this request' : 'Edit where it is set'" @click="editContainer(ancestors.find((a) => a.id === h.sourceId), 'headers')">
+                {{ h.overridden ? 'overridden' : h.source }}
+              </button>
+            </li>
+          </ul>
+        </div>
         <p class="px-4 pt-2 text-xs text-zinc-600">
           Auth and body Content-Type headers are added automatically on send. In Direct mode, browsers block some headers (e.g. Cookie, User-Agent, Host).
         </p>

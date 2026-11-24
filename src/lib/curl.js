@@ -122,7 +122,7 @@ export function parseCurl(command) {
 
   // Bearer token header -> auth tab
   const authIdx = req.headers.findIndex((h) => /^authorization$/i.test(h.key) && /^bearer\s+/i.test(h.value))
-  if (authIdx !== -1 && req.auth.type === 'none') {
+  if (authIdx !== -1 && req.auth.type === 'inherit') {
     req.auth.type = 'bearer'
     req.auth.bearer.token = req.headers[authIdx].value.replace(/^bearer\s+/i, '')
     req.headers.splice(authIdx, 1)

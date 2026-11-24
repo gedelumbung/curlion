@@ -3,7 +3,7 @@
 import { computed, markRaw, ref } from 'vue'
 import { BookOpen, Loader2, RefreshCw, Search, Wand2 } from 'lucide-vue-next'
 import CodeEditor from './CodeEditor.vue'
-import { scope, state, toast } from '../store.js'
+import { scope, state, toast, withInheritance } from '../store.js'
 import { resolveRequest } from '../lib/resolve.js'
 import { sendRequest } from '../lib/http.js'
 import { INTROSPECTION_QUERY, baseType, operationFor, summarizeSchema, typeName, variablesFor } from '../lib/graphql.js'
@@ -29,7 +29,7 @@ async function fetchSchema() {
   error.value = ''
   try {
     const probe = { ...props.request, graphql: { query: INTROSPECTION_QUERY, variables: '' } }
-    const res = await sendRequest(resolveRequest(probe, scope.value), { mode: state.mode, agentPort: state.agent.port })
+    const res = await sendRequest(resolveRequest(withInheritance(probe), scope.value), { mode: state.mode, agentPort: state.agent.port })
     if (res.json === undefined) throw new Error(`The server answered ${res.status} ${res.statusText} without JSON.`)
     const s = markRaw(summarizeSchema(res.json))
     schemas.set(props.request.id, s)

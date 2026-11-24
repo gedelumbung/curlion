@@ -1,5 +1,6 @@
 // Postman Collection v2.1 importer / exporter.
 import { kv, newCollection, newEnvironment, newFolder, newRequest, newSample, uid } from './model.js'
+import { inheritedHeaders } from './resolve.js'
 import { parseQuery } from './url.js'
 
 export class ImportError extends Error {}
@@ -11,9 +12,11 @@ const descText = (d) => (typeof d === 'string' ? d : d?.content || '')
 
 const authVal = (arr, key) => (Array.isArray(arr) ? arr.find((x) => x.key === key)?.value : arr?.[key]) ?? ''
 
+/** Postman auth -> Curlion auth on a request, folder or collection. No auth object means "inherit". */
 function mapAuth(pmAuth, req) {
-  if (!pmAuth || pmAuth.type === 'noauth') return
-  if (pmAuth.type === 'bearer') {
+  if (!pmAuth) return
+  if (pmAuth.type === 'noauth') req.auth.type = 'none'
+  else if (pmAuth.type === 'bearer') {
     req.auth.type = 'bearer'
     req.auth.bearer.token = String(authVal(pmAuth.bearer, 'token'))
   } else if (pmAuth.type === 'basic') {
@@ -80,6 +83,7 @@ const tryJson = (s) => {
 function mapItem(item, path) {
   if (Array.isArray(item.item)) {
     const folder = newFolder(item.name || 'Folder')
+    mapAuth(item.auth, folder)
     folder.items = item.item.map((child, i) => mapItem(child, `${path}.item[${i}]`))
     return folder
   }
@@ -131,16 +135,8 @@ export function importPostman(json) {
   col.description = descText(data.info.description)
   col.items = data.item.map((it, i) => mapItem(it, `item[${i}]`))
 
-  // Collection-level auth -> apply to requests without their own auth
-  if (data.auth && data.auth.type !== 'noauth') {
-    const apply = (items) =>
-      items.forEach((n) => {
-        if (n.type === 'folder') apply(n.items)
-        else if (n.auth.type === 'none') mapAuth(data.auth, n)
-      })
-    apply(col.items)
-    warnings.push('Collection-level auth was copied into each request without its own auth.')
-  }
+  // Collection and folder auth are inherited by requests without their own, as in Postman
+  mapAuth(data.auth, col)
   if (data.event?.length || JSON.stringify(data.item).includes('"event"')) {
     warnings.push('Pre-request/test scripts are not supported and were skipped. Use the Extract tab instead.')
   }
@@ -159,7 +155,8 @@ export function importPostman(json) {
 const outKv = (list) => list.map((r) => ({ key: r.key, value: r.value, ...(r.description ? { description: r.description } : {}), ...(r.enabled === false ? { disabled: true } : {}) }))
 
 function exportAuth(a) {
-  if (!a || a.type === 'none') return undefined
+  if (!a || a.type === 'inherit') return undefined // Postman: no auth object = inherit from parent
+  if (a.type === 'none') return { type: 'noauth' }
   if (a.type === 'bearer') return { type: 'bearer', bearer: [{ key: 'token', value: a.bearer.token, type: 'string' }] }
   if (a.type === 'basic')
     return { type: 'basic', basic: [{ key: 'username', value: a.basic.username, type: 'string' }, { key: 'password', value: a.basic.password, type: 'string' }] }
@@ -181,12 +178,18 @@ function exportBody(b) {
     }
 }
 
-function exportNode(n) {
-  if (n.type === 'folder') return { name: n.name, item: n.items.map(exportNode) }
+/** @param ancestors collection and folders above n; Postman has no folder headers, so they are copied into each request */
+function exportNode(n, ancestors) {
+  if (n.type === 'folder') {
+    const auth = exportAuth(n.auth)
+    return { name: n.name, ...(auth ? { auth } : {}), item: n.items.map((c) => exportNode(c, [...ancestors, n])) }
+  }
+  const own = new Set(n.headers.filter((h) => h.enabled !== false).map((h) => h.key.toLowerCase()))
+  const inherited = inheritedHeaders(ancestors).filter((h) => !own.has(h.key.toLowerCase()))
   const request = {
     method: n.method,
     ...(n.description ? { description: n.description } : {}),
-    header: outKv(n.headers),
+    header: outKv([...inherited, ...n.headers]),
     url: { raw: n.url, query: outKv(n.params) },
   }
   const auth = exportAuth(n.auth)
@@ -215,6 +218,7 @@ export function exportPostman(collection) {
       description: collection.description || '',
       schema: 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json',
     },
-    item: collection.items.map(exportNode),
+    ...(collection.auth && collection.auth.type !== 'none' ? { auth: exportAuth(collection.auth) } : {}),
+    item: collection.items.map((n) => exportNode(n, [collection])),
   }
 }

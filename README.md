@@ -58,6 +58,7 @@ netlify dev        # runs Vite + edge functions at /api/proxy and /mock/*
 | CRUD for requests/folders/collections, duplicate, rename, drag & drop | ✅ |
 | Methods GET/POST/PUT/PATCH/DELETE/OPTIONS/HEAD | ✅ |
 | Params ↔ URL bar (two-way sync), Headers (autocomplete), Auth (Bearer/Basic/API Key in header or query) | ✅ |
+| **Auth and headers on collections and folders** (sidebar menu or collection overview → *Auth & headers*): requests set to *Inherit from parent* (the default for new requests) use the nearest folder's auth, then the collection's; collection and folder headers are added to every request inside, and a request's own header with the same name wins. The Auth and Headers tabs show what is inherited and from where | ✅ |
 | Body: none, form-data (text/file), x-www-form-urlencoded, raw (JSON/Text/XML/HTML) | ✅ |
 | Response: colored status, time (ms), size, headers, Pretty/Tree/Raw, Copy | ✅ |
 | Send and Download + automatic binary response detection (`Content-Disposition`, pdf/zip/images) | ✅ |
@@ -68,7 +69,7 @@ netlify dev        # runs Vite + edge functions at /api/proxy and /mock/*
 | Direct Browser Mode & Netlify Proxy Mode (localhost is blocked by the proxy, with a clear message) | ✅ |
 | **Agent Mode** (like Postman's Desktop Agent): requests go through the Curlion Agent on your computer, so they reach localhost / your local network, skip CORS and can set Cookie/Host/User-Agent | ✅ |
 | Live sidebar search (name/folder/URL), request history: clicking an entry opens the request exactly as it was sent (method, URL, params, headers, auth, body) in a tab, to resend, edit or **Save to collection** | ✅ |
-| Import Postman Collection v2.1 (folders, auth, body, saved responses → samples, variables → environment) | ✅ |
+| Import Postman Collection v2.1 (folders, auth, body, saved responses → samples, variables → environment); collection and folder auth stay inherited | ✅ |
 | Export a collection to Postman v2.1 JSON | ✅ |
 | Environments + Globals, switcher, `{{var}}` green/red highlighting + value on hover, `{{` autocomplete | ✅ |
 | **Inline variable editing** (like Postman): click a `{{var}}` in any field to edit its current / initial value, add an undefined one to the active environment or Globals, or see what a dynamic variable generates | ✅ |
@@ -123,7 +124,7 @@ src/
     model.js            data factories (collection/folder/request/sample/env)
     variables.js        {{var}} interpolation, dynamic vars, JSON path
     url.js              URL ↔ params sync
-    resolve.js          request + env → final request (auth, body)
+    resolve.js          request + env → final request (inherited auth/headers, auth, body)
     http.js             fetch engine (direct/proxy), binary detection
     curl.js             cURL parser
     postman.js          Postman v2.1 import/export

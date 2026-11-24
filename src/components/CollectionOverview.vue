@@ -1,14 +1,14 @@
 <!-- Collection overview tab: opened by clicking a collection's name in the sidebar. -->
 <script setup>
 import { computed, ref, watch } from 'vue'
-import { Download, FilePlus, FolderPlus, Globe, History, Layers, Trash2, Users } from 'lucide-vue-next'
+import { Download, FilePlus, FolderPlus, Globe, History, KeyRound, Layers, Trash2, Users } from 'lucide-vue-next'
 import { addFolder, addRequest, cloudEnabled, deleteCollection, fetchActivity, openRequest, renameNode, roleOf, state, touchCollection } from '../store.js'
 import { ACTIONS, actionColor, ago } from '../lib/activity.js'
 import { exportPostman } from '../lib/postman.js'
 import { downloadJson, requestBadge } from '../lib/ui.js'
 
 const props = defineProps({ collection: { type: Object, required: true } })
-const emit = defineEmits(['collection']) // { col, tab } -> CollectionModal (publish / activity)
+const emit = defineEmits(['collection', 'settings']) // collection: { col, tab } -> CollectionModal (publish / activity); settings: { col } auth & headers
 const col = computed(() => props.collection)
 const isOwner = computed(() => roleOf(col.value) === 'owner')
 const online = computed(() => cloudEnabled && !!state.user)
@@ -103,6 +103,7 @@ function remove() {
       <div class="mt-4 flex flex-wrap gap-2 text-xs">
         <button class="inline-flex items-center gap-1.5 rounded bg-orange-500 px-3 py-1.5 font-medium text-on-accent hover:bg-orange-600" @click="addRequest(col, null)"><FilePlus :size="14" /> New request</button>
         <button class="inline-flex items-center gap-1.5 rounded bg-zinc-800 px-3 py-1.5 text-zinc-200 hover:bg-zinc-700" @click="addFolder(col, null)"><FolderPlus :size="14" /> New folder</button>
+        <button class="inline-flex items-center gap-1.5 rounded bg-zinc-800 px-3 py-1.5 text-zinc-200 hover:bg-zinc-700" title="Auth and headers used by every request in this collection" @click="emit('settings', { col, node: null })"><KeyRound :size="14" /> Auth &amp; headers</button>
         <button class="inline-flex items-center gap-1.5 rounded bg-zinc-800 px-3 py-1.5 text-zinc-200 hover:bg-zinc-700" @click="emit('collection', { col, tab: 'publish' })"><Globe :size="14" /> Publish docs</button>
         <button class="inline-flex items-center gap-1.5 rounded bg-zinc-800 px-3 py-1.5 text-zinc-200 hover:bg-zinc-700" @click="emit('collection', { col, tab: 'activity' })"><History :size="14" /> Activity log</button>
         <button class="inline-flex items-center gap-1.5 rounded bg-zinc-800 px-3 py-1.5 text-zinc-200 hover:bg-zinc-700" @click="exportCol"><Download :size="14" /> Export</button>

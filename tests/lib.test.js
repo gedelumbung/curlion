@@ -334,3 +334,79 @@ test('gRPC: parse .proto (with a well-known type), encode and decode', async () 
   assert.deepEqual(decodeMessage(p.root, 'demo.v1.HelloRequest', b64), { name: 'Ada', times: 3, mood: 'HAPPY', tags: ['x'] })
   assert.throws(() => encodeMessage(p.root, 'demo.v1.HelloRequest', { times: 'many' }), /Invalid demo.v1.HelloRequest/)
 })
+
+// ---- Auth / header inheritance -------------------------------------------------
+import { applyInheritance, effectiveAuth } from '../src/lib/resolve.js'
+import { newAuth, newCollection, folderPath } from '../src/lib/model.js'
+
+test('inheritance: nearest folder auth wins, collection is the fallback, own auth stays', () => {
+  const col = newCollection('API')
+  col.auth = { ...newAuth('bearer'), bearer: { token: 'col-token' } }
+  col.headers = [kv('X-Tenant', 'acme'), kv('Accept', 'application/json')]
+  const outer = newFolder('Admin')
+  outer.headers = [kv('X-Tenant', 'admin')]
+  const inner = newFolder('Users')
+  inner.auth = { ...newAuth('apikey'), apikey: { key: 'X-Key', value: 'k', in: 'header' } }
+  const req = newRequest('List', { url: 'https://api.test/u', headers: [kv('Accept', 'text/plain')] })
+  inner.items.push(req)
+  outer.items.push(inner)
+  col.items.push(outer)
+
+  const chain = [col, ...folderPath(col.items, req.id)]
+  assert.deepEqual(chain.map((n) => n.name), ['API', 'Admin', 'Users'])
+  assert.equal(effectiveAuth(req.auth, chain).source, inner)
+
+  const r = resolveRequest(applyInheritance(req, chain), new Map())
+  const h = Object.fromEntries(r.headers.map((x) => [x.key, x.value]))
+  assert.equal(h['X-Key'], 'k')
+  assert.equal(h['X-Tenant'], 'admin') // inner folder replaces the collection header
+  assert.equal(h.Accept, 'text/plain') // the request's own header wins
+  assert.equal(r.headers.filter((x) => x.key.toLowerCase() === 'accept').length, 1)
+
+  inner.auth.type = 'inherit'
+  assert.equal(resolveRequest(applyInheritance(req, chain), new Map()).headers.find((x) => x.key === 'Authorization').value, 'Bearer col-token')
+  req.auth.type = 'none'
+  assert.equal(resolveRequest(applyInheritance(req, chain), new Map()).headers.find((x) => x.key === 'Authorization'), undefined)
+  assert.equal(effectiveAuth(newAuth('inherit'), []).auth.type, 'none')
+})
+
+test('Postman: collection and folder auth import as inherited, export keeps them', () => {
+  const pm = {
+    info: { name: 'P', schema: 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json' },
+    auth: { type: 'bearer', bearer: [{ key: 'token', value: '{{token}}' }] },
+    item: [
+      { name: 'F', auth: { type: 'basic', basic: [{ key: 'username', value: 'u' }, { key: 'password', value: 'p' }] }, item: [{ name: 'a', request: { method: 'GET', url: 'https://x.test/a' } }] },
+      { name: 'b', request: { method: 'GET', url: 'https://x.test/b', auth: { type: 'noauth' } } },
+      { name: 'c', request: { method: 'GET', url: 'https://x.test/c' } },
+    ],
+  }
+  const { collection: col } = importPostman(pm)
+  assert.equal(col.auth.type, 'bearer')
+  assert.equal(col.items[0].auth.type, 'basic')
+  assert.equal(col.items[0].items[0].auth.type, 'inherit')
+  assert.equal(col.items[1].auth.type, 'none')
+  assert.equal(col.items[2].auth.type, 'inherit')
+
+  col.headers = [kv('X-Team', 'core')]
+  const out = exportPostman(col)
+  assert.equal(out.auth.type, 'bearer')
+  assert.equal(out.item[0].auth.type, 'basic')
+  assert.equal(out.item[0].item[0].request.auth, undefined)
+  assert.equal(out.item[1].request.auth.type, 'noauth')
+  assert.deepEqual(out.item[2].request.header.map((h) => h.key), ['X-Team']) // Postman has no collection headers
+})
+
+test('docs snapshot shows inherited auth and headers on each request', () => {
+  const col = newCollection('D')
+  col.auth = { ...newAuth('bearer'), bearer: { token: 'secret-literal' } }
+  const f = newFolder('F')
+  f.headers = [kv('X-Api-Key', 'literal')]
+  f.items.push(newRequest('r', { url: 'https://d.test' }))
+  col.items.push(f)
+  const snap = buildDocsSnapshot(col)
+  const r = snap.items[0].items[0]
+  assert.equal(r.auth.type, 'bearer')
+  assert.equal(r.auth.bearer.token, '<token>')
+  assert.deepEqual(r.headers.map((h) => [h.key, h.value]), [['X-Api-Key', '<redacted>']])
+  assert.equal(snap.items[0].auth, undefined)
+})

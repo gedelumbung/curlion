@@ -16,6 +16,7 @@ import ImportModal from './components/ImportModal.vue'
 import CodeModal from './components/CodeModal.vue'
 import LoginScreen from './components/LoginScreen.vue'
 import CollectionModal from './components/CollectionModal.vue'
+import ContainerSettingsModal from './components/ContainerSettingsModal.vue'
 import ActivityDashboard from './components/ActivityDashboard.vue'
 import AgentModal from './components/AgentModal.vue'
 import AboutModal from './components/AboutModal.vue'
@@ -31,6 +32,12 @@ const collectionCtx = ref(null) // { col, tab }
 function openCollection(ctx) {
   collectionCtx.value = ctx
   modal.value = 'collection'
+}
+// Auth & headers of a collection or folder: { col, node, tab }
+const containerCtx = ref(null)
+function openContainer(ctx) {
+  containerCtx.value = { tab: 'auth', ...ctx }
+  modal.value = 'container'
 }
 const sidebarOpen = ref(true)
 
@@ -225,7 +232,7 @@ const syncLabel = {
     </header>
 
     <div :inert="!!modal" class="flex min-h-0 flex-1" :class="{ 'select-none': dragging, 'cursor-col-resize': dragging === 'sidebar', 'cursor-row-resize': dragging === 'split' }">
-      <Sidebar v-show="sidebarOpen" class="shrink-0" :style="{ width: sidebarWidth + 'px' }" @import="modal = 'import'" @collection="openCollection" />
+      <Sidebar v-show="sidebarOpen" class="shrink-0" :style="{ width: sidebarWidth + 'px' }" @import="modal = 'import'" @collection="openCollection" @settings="openContainer" />
       <div
         v-show="sidebarOpen"
         class="relative z-10 -ml-1 w-1 shrink-0 cursor-col-resize transition-colors hover:bg-orange-500/60"
@@ -239,7 +246,7 @@ const syncLabel = {
         <TabBar v-if="openTabs.length" />
         <div v-if="activeRequest" ref="mainEl" class="flex min-h-0 flex-1 flex-col">
           <!-- keyed by request so each tab gets fresh editor state (active sub-tab, scroll) -->
-          <RequestEditor :key="activeRequest.id" class="min-h-0" :style="{ flex: `0 0 ${split * 100}%` }" @show-code="modal = 'code'" />
+          <RequestEditor :key="activeRequest.id" class="min-h-0" :style="{ flex: `0 0 ${split * 100}%` }" @show-code="modal = 'code'" @container-settings="openContainer" />
           <div
             class="relative z-10 -mb-1 h-1 shrink-0 cursor-row-resize transition-colors hover:bg-orange-500/60"
             :class="{ 'bg-orange-500/60': dragging === 'split' }"
@@ -250,7 +257,7 @@ const syncLabel = {
           <MessageLog v-if="activeRequest.protocol === 'ws' || activeRequest.protocol === 'socketio'" :key="'log' + activeRequest.id" class="min-h-0 flex-1" />
           <ResponseViewer v-else :key="activeRequest.id" class="min-h-0 flex-1" />
         </div>
-        <CollectionOverview v-else-if="activeOverview" :key="activeOverview.id" :collection="activeOverview" @collection="openCollection" />
+        <CollectionOverview v-else-if="activeOverview" :key="activeOverview.id" :collection="activeOverview" @collection="openCollection" @settings="openContainer" />
         <div v-else class="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center text-zinc-500">
           <CurlionLogo class="h-12 w-12 text-zinc-100 opacity-60" />
           <p>Select a request from the sidebar, or</p>
@@ -276,6 +283,15 @@ const syncLabel = {
     <VarPopover v-if="state.varPopover" />
     <SaveRequestDialog v-if="state.savePrompt" />
     <UnsavedDialog v-if="state.unsavedPrompt" :key="state.unsavedPrompt.index + ':' + state.unsavedPrompt.name" />
+    <ContainerSettingsModal
+      v-if="modal === 'container'"
+      :key="containerCtx.node?.id || containerCtx.col.id"
+      :collection="containerCtx.col"
+      :node="containerCtx.node"
+      :initial-tab="containerCtx.tab"
+      @open="(col, node) => openContainer({ col, node })"
+      @close="modal = null"
+    />
     <CollectionModal v-if="modal === 'collection'" :collection="collectionCtx.col" :initial-tab="collectionCtx.tab" @close="modal = null" />
 
     <!-- Toasts: top layer, re-shown for each new toast so they sit above any open modal -->

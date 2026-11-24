@@ -1,10 +1,10 @@
 // Global app store: state, persistence (IndexedDB) and cloud sync (Supabase).
 import { computed, reactive, toRaw, watch } from 'vue'
 import { db, getMeta, migrateLegacyDb, setMeta } from './db/index.js'
-import { clone, ensureProtocol, findNode, newCollection, newEnvironment, newFolder, newRequest, protocolOf, reId, uid } from './lib/model.js'
+import { clone, ensureProtocol, findNode, folderPath, newCollection, newEnvironment, newFolder, newRequest, protocolOf, reId, uid } from './lib/model.js'
 import { buildScope, getByPath, interpolate } from './lib/variables.js'
 import { paramsFromUrl } from './lib/url.js'
-import { resolveRequest } from './lib/resolve.js'
+import { applyInheritance, resolveRequest } from './lib/resolve.js'
 import { AGENT_DEFAULT_PORT, agentBase, pingAgent, sendRequest } from './lib/http.js'
 import { connectSocketIo, connectWsAgent, connectWsDirect } from './lib/realtime.js'
 import { GRPC_STATUS, decodeMessage, encodeMessage, findMethod, parseProto } from './lib/grpc.js'
@@ -506,6 +506,18 @@ function findRequest(requestId, collectionId) {
   return null
 }
 
+/** Collection and folders above a request, outermost first ([] for history tabs). */
+export function ancestorsFor(requestId, collectionId = state.active?.collectionId) {
+  const found = findRequest(requestId, collectionId) || findRequest(requestId)
+  if (!found) return []
+  return [found.col, ...(folderPath(found.col.items, requestId) || [])]
+}
+
+/** The request as sent: auth and headers inherited from its folders and collection applied. */
+export function withInheritance(req, collectionId) {
+  return applyInheritance(req, ancestorsFor(req.id, collectionId))
+}
+
 function ensureDraft(requestId, collectionId) {
   if (state.drafts[requestId]) return
   const found = findRequest(requestId, collectionId)
@@ -570,6 +582,13 @@ function refreshCleanDrafts() {
       draftBase.set(id, saved)
     }
   }
+}
+
+/** Switch saved requests to "inherit" auth (open tabs without edits follow). */
+export function makeRequestsInherit(col, requests) {
+  for (const r of requests) r.auth = { ...(r.auth || {}), type: 'inherit' }
+  touchCollection(col)
+  refreshCleanDrafts()
 }
 
 /** Ask what to do with unsaved changes (rendered by UnsavedDialog.vue). */
@@ -936,7 +955,7 @@ export async function send({ download = false } = {}) {
   controllers.set(id, controller)
   state.pending[id] = true
   delete state.errors[id]
-  const resolved = resolveRequest(req, scope.value)
+  const resolved = resolveRequest(withInheritance(req), scope.value)
   try {
     if (protocol === 'grpc') {
       const res = await invokeGrpc(req, resolved, controller.signal)
@@ -1052,7 +1071,7 @@ export async function connectRealtime() {
   const id = req.id
   const protocol = protocolOf(req)
   disconnectRealtime(id)
-  const resolved = resolveRequest(req, scope.value)
+  const resolved = resolveRequest(withInheritance(req), scope.value)
   const prev = state.conns[id]?.log || []
   state.conns[id] = { status: 'connecting', protocol, log: prev }
   logConn(id, { dir: 'info', data: `Connecting to ${resolved.url}${state.mode === 'agent' && protocol === 'ws' ? ' (through the agent)' : ''}…` })

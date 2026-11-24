@@ -13,6 +13,48 @@ function hasHeader(headers, name) {
   return headers.some((h) => h.key.toLowerCase() === name.toLowerCase())
 }
 
+// ---- Inheritance (collection -> folders -> request) --------------------------------
+
+/**
+ * The auth a request actually uses. 'inherit' walks up to the nearest folder, then the
+ * collection, that sets one; nothing set anywhere means no auth.
+ * @param ancestors [collection, ...folders], outermost first
+ * @returns {{ auth, source: object|null }} source: the folder / collection the auth comes from
+ */
+export function effectiveAuth(auth, ancestors = []) {
+  if (auth && auth.type && auth.type !== 'inherit') return { auth, source: null }
+  for (let i = ancestors.length - 1; i >= 0; i--) {
+    const a = ancestors[i].auth
+    if (a && a.type && a.type !== 'inherit') return { auth: a, source: ancestors[i] }
+  }
+  return { auth: { type: 'none' }, source: null }
+}
+
+/** Enabled collection / folder headers, outermost first; an inner header replaces an outer one with the same name. */
+export function inheritedHeaders(ancestors = []) {
+  const out = []
+  for (const node of ancestors) {
+    for (const h of enabled(node.headers)) {
+      const i = out.findIndex((x) => x.key.toLowerCase() === h.key.toLowerCase())
+      if (i !== -1) out.splice(i, 1)
+      out.push({ ...h, source: node.name, sourceId: node.id })
+    }
+  }
+  return out
+}
+
+/**
+ * The request as it is sent: inherited auth filled in and the collection / folder headers
+ * added in front of its own (its own header wins when both set the same name).
+ * Returns a shallow copy; the stored request is not changed.
+ */
+export function applyInheritance(req, ancestors = []) {
+  const { auth, source } = effectiveAuth(req.auth, ancestors)
+  const own = new Set(enabled(req.headers).map((h) => h.key.toLowerCase()))
+  const parent = inheritedHeaders(ancestors).filter((h) => !own.has(h.key.toLowerCase()))
+  return { ...req, auth, authSourceId: source?.id || null, headers: [...parent, ...(req.headers || [])] }
+}
+
 /**
  * @returns {{ method, url, headers: {key,value}[], body: null | {mode, raw?, contentType?, fields?} }}
  */

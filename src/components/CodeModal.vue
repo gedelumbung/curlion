@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 import { Copy } from 'lucide-vue-next'
 import Modal from './Modal.vue'
 import CodeEditor from './CodeEditor.vue'
-import { activeRequest, scope, toast } from '../store.js'
+import { activeRequest, scope, toast, withInheritance } from '../store.js'
 import { resolveRequest } from '../lib/resolve.js'
 import { generateSnippet, snippetLangsFor } from '../lib/snippets.js'
 import { copyText } from '../lib/ui.js'
@@ -17,7 +17,7 @@ const maskSecrets = ref(true)
 
 const code = computed(() => {
   if (!activeRequest.value) return ''
-  const resolved = resolveRequest(activeRequest.value, scope.value, { maskSecrets: maskSecrets.value })
+  const resolved = resolveRequest(withInheritance(activeRequest.value), scope.value, { maskSecrets: maskSecrets.value })
   return generateSnippet(lang.value, resolved, activeRequest.value)
 })
 

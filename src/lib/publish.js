@@ -2,6 +2,7 @@
 // Literal credentials are replaced with placeholders; {{variables}} are kept as-is
 // (their values live in environments, which are never published).
 import { clone } from './model.js'
+import { applyInheritance } from './resolve.js'
 
 const ONLY_VARS = /^\s*(\{\{[^{}]+\}\}\s*)*$/
 const SENSITIVE_HEADER = /^(authorization|proxy-authorization|cookie|set-cookie|x-api-key|api-key|apikey|x-auth-token|x-access-token|x-csrf-token)$/i
@@ -12,10 +13,11 @@ const hide = (value, placeholder) => (!value || ONLY_VARS.test(value) ? value : 
 export function sanitizeRequest(req) {
   const r = clone(req)
   if (r.auth) {
-    r.auth.bearer.token = hide(r.auth.bearer?.token, '<token>')
-    r.auth.basic.password = hide(r.auth.basic?.password, '<password>')
-    r.auth.apikey.value = hide(r.auth.apikey?.value, '<api-key>')
+    if (r.auth.bearer) r.auth.bearer.token = hide(r.auth.bearer.token, '<token>')
+    if (r.auth.basic) r.auth.basic.password = hide(r.auth.basic.password, '<password>')
+    if (r.auth.apikey) r.auth.apikey.value = hide(r.auth.apikey.value, '<api-key>')
   }
+  delete r.authSourceId
   for (const h of r.headers || []) if (SENSITIVE_HEADER.test(h.key)) h.value = hide(h.value, '<redacted>')
   for (const p of r.params || []) if (/^(api_?key|access_token|token|key|secret)$/i.test(p.key)) p.value = hide(p.value, '<redacted>')
   if (r.url) r.url = r.url.replace(/([?&](?:api_?key|access_token|token|key|secret)=)([^&#]*)/gi, (m, k, v) => k + hide(decodeURIComponent(v), '<redacted>'))
@@ -26,19 +28,24 @@ export function sanitizeRequest(req) {
   delete r.extract
   // keep only enabled rows
   r.params = (r.params || []).filter((x) => x.enabled !== false)
-  r.headers = (r.headers || []).filter((x) => x.enabled !== false)
+  r.headers = (r.headers || []).filter((x) => x.enabled !== false).map(({ source, sourceId, ...h }) => h)
   return r
 }
 
-function sanitizeItems(items) {
-  return items.map((n) => (n.type === 'folder' ? { ...clone({ ...n, items: [] }), items: sanitizeItems(n.items) } : sanitizeRequest(n)))
+/** Requests are published as they are sent: inherited auth and headers are filled in. */
+function sanitizeItems(items, ancestors) {
+  return items.map((n) => {
+    if (n.type !== 'folder') return sanitizeRequest(applyInheritance(n, ancestors))
+    const { auth, headers, ...folder } = n // folder settings are already applied to its requests
+    return { ...clone({ ...folder, items: [] }), items: sanitizeItems(n.items, [...ancestors, n]) }
+  })
 }
 
 export function buildDocsSnapshot(collection) {
   return {
     name: collection.name,
     description: collection.description || '',
-    items: sanitizeItems(collection.items),
+    items: sanitizeItems(collection.items, [collection]),
   }
 }
 

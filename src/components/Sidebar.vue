@@ -1,6 +1,6 @@
 <script setup>
 import { computed, nextTick, ref } from 'vue'
-import { ChevronRight, Clock, Copy, Download, FilePlus, FolderPlus, Globe, History, Layers, MoreHorizontal, Pencil, Plus, Search, Trash2, Upload, Users } from 'lucide-vue-next'
+import { ChevronRight, Clock, Copy, Download, FilePlus, FolderPlus, Globe, History, KeyRound, Layers, MoreHorizontal, Pencil, Plus, Search, Trash2, Upload, Users } from 'lucide-vue-next'
 import TreeNode from './TreeNode.vue'
 import {
   addNewRequest,
@@ -27,7 +27,7 @@ import { vTopLayer } from '../lib/topLayer.js'
 import { exportPostman } from '../lib/postman.js'
 import { downloadJson, methodColor, statusColor } from '../lib/ui.js'
 
-const emit = defineEmits(['import', 'collection'])
+const emit = defineEmits(['import', 'collection', 'settings']) // settings: ({ col, node }) auth & headers
 const tab = ref('collections')
 const renamingId = ref(null)
 const menu = ref(null) // { x, y, items }
@@ -61,6 +61,7 @@ function openMenu(e, col, node = null) {
   if (isContainer) {
     items.push({ icon: FilePlus, label: 'Add request', run: () => addRequest(col, parentId) })
     items.push({ icon: FolderPlus, label: 'Add folder', run: () => startRename(addFolder(col, parentId).id) })
+    items.push({ icon: KeyRound, label: 'Auth & headers', run: () => emit('settings', { col, node }) })
   }
   items.push({ icon: Pencil, label: 'Rename', run: () => (node ? startRename(node.id) : beginColRename(col)) })
   if (node) {

@@ -16,7 +16,7 @@ export const collectionToRow = (c, ownerId) => ({
   description: c.description || null,
   is_public: !!c.isPublic,
   public_slug: c.publicSlug || null,
-  tree_data: { items: c.items },
+  tree_data: { items: c.items, auth: c.auth || null, headers: c.headers || [] }, // collection-level auth / headers ride along with the tree
   updated_at: c.updatedAt,
 })
 
@@ -29,6 +29,8 @@ export const rowToCollection = (r) => ({
   isPublic: r.is_public,
   publicSlug: r.public_slug,
   items: r.tree_data?.items || [],
+  auth: r.tree_data?.auth || { type: 'none' },
+  headers: r.tree_data?.headers || [],
   createdAt: r.created_at,
   updatedAt: r.updated_at,
   syncedAt: r.updated_at,

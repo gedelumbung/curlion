@@ -56,6 +56,7 @@
         "Local-first storage in the browser (IndexedDB)",
         "Postman Collection v2.1 import and export, and cURL import",
         "Environments, globals and variables with inline editing",
+        "Collection and folder auth and headers, inherited by every request inside",
         "Team workspaces with shared environments",
         "Code snippets for cURL, JavaScript, PHP, Go and Python",
         "Published read-only API documentation",
@@ -87,7 +88,7 @@
           "name": "Can I import my Postman collections into Curlion?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Yes. Curlion imports Postman Collection v2.1 JSON, including folders, auth, bodies, saved responses and variables (variables become an environment). You can also paste a raw cURL command into the URL bar, and export any collection back to Postman v2.1 JSON."
+            "text": "Yes. Curlion imports Postman Collection v2.1 JSON, including folders, auth, bodies, saved responses and variables (variables become an environment). Collection and folder auth stays at that level and is inherited by the requests inside, as in Postman. You can also paste a raw cURL command into the URL bar, and export any collection back to Postman v2.1 JSON."
           }
         },
         {
@@ -453,6 +454,11 @@
               <h3>Secure by default</h3>
               <p>Sign-in only, admin-created accounts, row-level security, masked secrets, and credentials stripped from published docs.</p>
             </article>
+            <article class="card">
+              <span class="ico"><svg viewBox="0 0 24 24"><path d="M20 10a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-2.5a1 1 0 0 1-.8-.4l-.9-1.2A1 1 0 0 0 15 3h-2a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1Z" /><path d="M20 21a1 1 0 0 0 1-1v-3a1 1 0 0 0-1-1h-2.9a1 1 0 0 1-.88-.55l-.42-.85a1 1 0 0 0-.92-.6H13a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1Z" /><path d="M3 5a2 2 0 0 0 2 2h3" /><path d="M3 3v13a2 2 0 0 0 2 2h3" /></svg></span>
+              <h3>Set auth once</h3>
+              <p>Give a collection or folder its auth and headers, and every request inside inherits them. Rotate a token in one place, not fifty.</p>
+            </article>
           </div>
         </div>
       </section>
@@ -703,7 +709,7 @@ VITE_SUPABASE_ANON_KEY</pre>
             </details>
             <details>
               <summary>Can I import my Postman collections into Curlion?</summary>
-              <p>Yes. Curlion imports Postman Collection v2.1 JSON, including folders, auth, bodies, saved responses and variables (variables become an environment). You can also paste a raw cURL command into the URL bar, and export any collection back to Postman v2.1 JSON.</p>
+              <p>Yes. Curlion imports Postman Collection v2.1 JSON, including folders, auth, bodies, saved responses and variables (variables become an environment). Collection and folder auth stays at that level and is inherited by the requests inside, as in Postman. You can also paste a raw cURL command into the URL bar, and export any collection back to Postman v2.1 JSON.</p>
             </details>
             <details>
               <summary>How is Curlion different from Insomnia, Bruno and Yaak?</summary>

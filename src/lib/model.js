@@ -48,6 +48,22 @@ export function ensureProtocol(req) {
   return req
 }
 
+/**
+ * Auth settings, shared by requests, folders and collections.
+ * 'inherit' (requests and folders) uses the nearest folder or the collection that sets one.
+ */
+export const AUTH_DEFAULTS = {
+  bearer: () => ({ token: '' }),
+  basic: () => ({ username: '', password: '' }),
+  apikey: () => ({ key: '', value: '', in: 'header' }), // header | query
+}
+
+export function newAuth(type = 'inherit') {
+  const a = { type }
+  for (const [k, make] of Object.entries(AUTH_DEFAULTS)) a[k] = make()
+  return a
+}
+
 export function newRequest(name = 'New Request', patch = {}) {
   return {
     id: uid(),
@@ -59,12 +75,7 @@ export function newRequest(name = 'New Request', patch = {}) {
     description: '', // shown on the published docs page
     params: [],
     headers: [],
-    auth: {
-      type: 'none', // none | bearer | basic | apikey
-      bearer: { token: '' },
-      basic: { username: '', password: '' },
-      apikey: { key: '', value: '', in: 'header' }, // header | query
-    },
+    auth: newAuth('inherit'), // inherit | none | bearer | basic | apikey
     body: {
       mode: 'none', // none | form-data | urlencoded | raw
       rawType: 'json', // json | text | xml | html
@@ -79,7 +90,8 @@ export function newRequest(name = 'New Request', patch = {}) {
 }
 
 export function newFolder(name = 'New Folder') {
-  return { id: uid(), type: 'folder', name, items: [] }
+  // auth / headers apply to every request inside (see applyInheritance in resolve.js)
+  return { id: uid(), type: 'folder', name, items: [], auth: newAuth('inherit'), headers: [] }
 }
 
 export function newCollection(name = 'New Collection') {
@@ -89,6 +101,8 @@ export function newCollection(name = 'New Collection') {
     name,
     description: '',
     items: [],
+    auth: newAuth('none'), // default auth for requests set to "inherit"
+    headers: [], // sent with every request in the collection
     isPublic: false,
     publicSlug: null,
     createdAt: now,
@@ -137,6 +151,18 @@ export function findNode(items, id) {
     }
   })
   return found
+}
+
+/** Folders that contain the node with this id, outermost first: [] at the top level, null when not found. */
+export function folderPath(items, id) {
+  for (const n of items) {
+    if (n.id === id) return []
+    if (n.type === 'folder') {
+      const inner = folderPath(n.items, id)
+      if (inner) return [n, ...inner]
+    }
+  }
+  return null
 }
 
 /** Deep copy a node, assigning fresh ids to it and all descendants. */
