@@ -21,6 +21,7 @@ import {
 } from './lib/oauth.js'
 import { AGENT_DEFAULT_PORT, agentBase, pingAgent, sendRequest } from './lib/http.js'
 import { connectSocketIo, connectWsAgent, connectWsDirect } from './lib/realtime.js'
+import { connectSse } from './lib/sse.js'
 import { GRPC_STATUS, decodeMessage, encodeMessage, findMethod, parseProto } from './lib/grpc.js'
 import { indentString } from './lib/settings.js'
 import { collectionToRow, environmentToRow, rowToCollection, rowToEnvironment, rowToWorkspace, supabase } from './lib/supabase.js'
@@ -1124,6 +1125,8 @@ export async function send({ download = false } = {}) {
   if (protocol === 'ws' || protocol === 'socketio') {
     return state.conns[id]?.status === 'open' ? sendRealtime(id) : connectRealtime()
   }
+  // Server-Sent Events: Send (Ctrl+Enter) connects; there is nothing to send once open
+  if (protocol === 'sse') return ['open', 'connecting'].includes(state.conns[id]?.status) ? undefined : connectRealtime()
   controllers.get(id)?.abort()
   const controller = new AbortController()
   controllers.set(id, controller)
@@ -1204,7 +1207,7 @@ export function runnableRequests(col, folderId = null) {
       if (n.type === 'folder') visit(n.items, [...path, n.name])
       else {
         const p = protocolOf(n)
-        out.push({ id: n.id, name: n.name, method: n.method, protocol: p, path: path.join(' / '), skip: p === 'http' || p === 'graphql' ? null : `${p === 'grpc' ? 'gRPC' : p === 'ws' ? 'WebSocket' : 'Socket.IO'} requests are not run` })
+        out.push({ id: n.id, name: n.name, method: n.method, protocol: p, path: path.join(' / '), skip: p === 'http' || p === 'graphql' ? null : `${{ grpc: 'gRPC', ws: 'WebSocket', socketio: 'Socket.IO', sse: 'SSE' }[p] || p} requests are not run` })
       }
     }
   }
@@ -1345,7 +1348,7 @@ export async function connectRealtime() {
       state.conns[id].openedAt = Date.now()
       logConn(id, { dir: 'info', data: `Connected${sub ? ` · ${sub}` : ''}` })
     },
-    onMessage: ({ event, data, binary }) => logConn(id, { dir: 'in', event, data, binary }),
+    onMessage: ({ event, data, binary, id: eventId }) => logConn(id, { dir: 'in', event, data, binary, eventId }), // eventId: SSE id field
     onInfo: (text) => logConn(id, { dir: 'info', data: text }),
     onError: (text) => logConn(id, { dir: 'error', data: text }),
     onClose: ({ code, reason }) => {
@@ -1356,7 +1359,10 @@ export async function connectRealtime() {
     },
   }
   try {
-    if (protocol === 'ws') {
+    if (protocol === 'sse') {
+      if (state.mode === 'proxy') logConn(id, { dir: 'info', data: 'Proxy mode: the hosting provider may end long-running streams. Use Direct or Agent mode for long sessions.' })
+      realtime.set(id, connectSse(resolved, { mode: state.mode, agentPort: state.agent.port, reconnect: !!req.sse.reconnect, lastEventId: interpolate(req.sse.lastEventId || '', scope.value).trim() }, cb))
+    } else if (protocol === 'ws') {
       const protocols = req.ws.protocols.split(',').map((p) => p.trim()).filter(Boolean)
       if (state.mode === 'agent') realtime.set(id, connectWsAgent({ url: resolved.url, protocols, headers: resolved.headers }, state.agent.port, cb))
       else {

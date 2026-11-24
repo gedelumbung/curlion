@@ -66,6 +66,7 @@ netlify dev        # runs Vite + edge functions at /api/proxy and /mock/*
 | **GraphQL** requests: Query and Variables editors, schema explorer from introspection (click "Use" to generate an operation), sent via Direct / Proxy / Agent; Postman GraphQL bodies import and export | ✅ |
 | **WebSocket**: connect, send text/JSON, saved messages, live message log; subprotocols; through the Agent with custom headers, auth, localhost and self-signed TLS | ✅ |
 | **Socket.IO**: connect with path, transport and auth payload, emit events with arguments and ack, every incoming event logged | ✅ |
+| **Server-Sent Events (SSE)**: connect to a `text/event-stream` endpoint with any method, headers, auth (incl. inherited and OAuth 2.0) and body, which `EventSource` cannot do; events stream into the message log with their name and id; optional EventSource-style reconnect (server `retry:`, `Last-Event-ID`) and a starting Last-Event-ID; works in Direct (needs CORS), Agent and Proxy mode (the host may end long streams); OpenAPI operations that return `text/event-stream` import as SSE requests; cURL and JavaScript snippets | ✅ |
 | **gRPC** (through the Agent): paste or upload a .proto (well-known types built in), pick a method, example message, metadata, TLS; unary, server streaming (replies collected) and client streaming (JSON array); grpcurl snippet | ✅ |
 | Direct Browser Mode & Netlify Proxy Mode (localhost is blocked by the proxy, with a clear message) | ✅ |
 | **Agent Mode** (like Postman's Desktop Agent): requests go through the Curlion Agent on your computer, so they reach localhost / your local network, skip CORS and can set Cookie/Host/User-Agent | ✅ |
@@ -129,8 +130,9 @@ src/
     variables.js        {{var}} interpolation, dynamic vars, JSON path
     url.js              URL ↔ params sync
     resolve.js          request + env → final request (inherited auth/headers, auth, body)
+    sse.js              Server-Sent Events: stream parser and fetch-based client
     oauth.js            OAuth 2.0: PKCE, authorize URL, token requests, token parsing
-    http.js             fetch engine (direct/proxy), binary detection
+    http.js             fetch engine (direct/proxy/agent), streams, binary detection
     curl.js             cURL parser
     postman.js          Postman v2.1 import/export
     openapi.js          OpenAPI 3.x / Swagger 2.0 import (loaded on demand with the YAML parser)
@@ -166,6 +168,7 @@ Then pick **Agent** in the header (the dot is green when the agent is running; c
 - Follows redirects, decodes gzip/deflate/br, keeps multipart boundaries, accepts self-signed HTTPS certificates (`--strict-tls` to verify them).
 - Logs each request in the terminal.
 - Also carries **gRPC** calls (HTTP/2, `POST /grpc`) and **WebSocket** connections with custom headers (`/ws/*`, relayed to the browser as Server-Sent Events). Agent 1.1 or newer is needed for these.
+- Streams responses as they arrive, so **SSE** works through it; from Agent 1.2, event streams have no idle timeout (older agents drop a stream after 120 s without data).
 
 ## Notes
 

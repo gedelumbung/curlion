@@ -673,3 +673,85 @@ test('runTests: skips disabled and incomplete tests, resolves {{variables}} in e
   assert.equal(out[0].name, 'JSON id equals u1')
   assert.deepEqual(summarize(out), { passed: 1, failed: 1, total: 2 })
 })
+
+// ---- Server-Sent Events ---------------------------------------------------------------
+import { connectSse, createSseParser } from '../src/lib/sse.js'
+import http from 'node:http'
+
+test('SSE parser: fields, multi-line data, ids, retry, comments, CRLF split across chunks', () => {
+  const events = []
+  const retries = []
+  const comments = []
+  const p = createSseParser({ onEvent: (e) => events.push(e), onRetry: (ms) => retries.push(ms), onComment: (c) => comments.push(c) })
+  const stream = '﻿: hello\r\nevent: price\r\nid: 1\r\ndata: {"a":1}\r\n\r\ndata: line1\ndata:line2\n\nretry: 2500\nid: 2\ndata\n\nevent: ignored-no-data\n\nid: 3\ndata: tail'
+  // feed one character at a time: every boundary, including \r|\n, is exercised
+  for (const ch of stream) p.push(ch)
+  p.end()
+  assert.deepEqual(events, [
+    { event: 'price', data: '{"a":1}', id: '1' },
+    { event: 'message', data: 'line1\nline2', id: '1' },
+    { event: 'message', data: '', id: '2' },
+  ])
+  assert.deepEqual(retries, [2500])
+  assert.deepEqual(comments, ['hello'])
+  assert.equal(p.lastEventId, '3') // the unterminated last event is dropped, its id still counts
+})
+
+test('SSE client: streams events, rejects non-streams, reconnects with Last-Event-ID', async () => {
+  const seen = []
+  const server = http.createServer((req, res) => {
+    seen.push({ path: req.url, last: req.headers['last-event-id'] || null, accept: req.headers.accept, auth: req.headers.authorization })
+    if (req.url === '/json') return res.writeHead(200, { 'Content-Type': 'application/json' }).end('{"no":"stream"}')
+    res.writeHead(200, { 'Content-Type': 'text/event-stream' })
+    const n = Number(req.headers['last-event-id'] || 0)
+    res.write('retry: 50\n\n')
+    res.write(`id: ${n + 1}\nevent: tick\ndata: ${n + 1}\n\n`)
+    setTimeout(() => res.end(`id: ${n + 2}\ndata: ${n + 2}\n\n`), 20)
+  })
+  await new Promise((r) => server.listen(0, '127.0.0.1', r))
+  const base = `http://127.0.0.1:${server.address().port}`
+  const run = (path, reconnect, until) =>
+    new Promise((resolve) => {
+      const log = []
+      let conn
+      const cb = {
+        onOpen: () => log.push('open'),
+        onMessage: (e) => {
+          log.push(`${e.event}:${e.data}#${e.id}`)
+          if (until(log)) conn.close()
+        },
+        onInfo: (t) => log.push(`info:${t.split(' ')[0]}`),
+        onError: (t) => log.push(`error:${t.split('\n')[0]}`),
+        onClose: ({ reason }) => resolve({ log, reason }),
+      }
+      conn = connectSse({ method: 'GET', url: base + path, headers: [{ key: 'Accept', value: 'text/event-stream' }, { key: 'Authorization', value: 'Bearer t' }], body: null }, { mode: 'direct', reconnect }, cb)
+    })
+  try {
+    const once = await run('/events', false, () => false)
+    assert.deepEqual(once.log, ['open', 'tick:1#1', 'message:2#2'])
+    assert.equal(once.reason, 'stream ended by the server')
+
+    const again = await run('/events', true, (log) => log.includes('message:4#4'))
+    assert.deepEqual(again.log, ['open', 'tick:1#1', 'message:2#2', 'info:Stream', 'info:Reconnected', 'tick:3#3', 'message:4#4'])
+    assert.equal(seen.at(-1).last, '2')
+    assert.equal(seen.at(-1).auth, 'Bearer t')
+
+    const bad = await run('/json', true, () => false)
+    assert.match(bad.log[0], /^error:Not an event stream: Content-Type is "application\/json"/)
+    assert.equal(bad.reason, 'not an event stream')
+  } finally {
+    server.close()
+  }
+})
+
+test('SSE: Accept header added, snippets, OpenAPI event-stream operations', async () => {
+  const req = newRequest('s', { protocol: 'sse', url: 'api.test/events' })
+  const r = resolveRequest(req, new Map())
+  assert.equal(r.url, 'http://api.test/events')
+  assert.deepEqual(r.headers, [{ key: 'Accept', value: 'text/event-stream' }])
+  assert.match(generateSnippet('curl-sse', r), /^curl --no-buffer /)
+  assert.match(generateSnippet('sse-js', r), /new EventSource\("http:\/\/api\.test\/events"\)/)
+  const { collection } = importOpenApi('openapi: 3.0.0\ninfo: { title: S, version: "1" }\npaths:\n  /stream:\n    get:\n      responses:\n        "200":\n          description: events\n          content:\n            text/event-stream:\n              schema: { type: string }\n')
+  assert.equal(collection.items[0].protocol, 'sse')
+  assert.deepEqual(collection.items[0].sse, { reconnect: false, lastEventId: '' })
+})

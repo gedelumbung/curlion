@@ -177,13 +177,12 @@ function buildBody(body) {
 }
 
 /**
- * Send a resolved request.
- * @param resolved output of resolveRequest()
- * @param opts { mode: 'direct'|'proxy'|'agent', agentPort, download: boolean, signal,
- *   saveBinary: false to skip saving binary responses as files (Collection Runner) }
+ * fetch() a resolved request in the given mode. Relayed modes (Proxy, Agent) carry the target
+ * in X-Curlion-* headers and stream the body back untouched.
+ * @returns {{ res: Response, relayed: boolean, started: number }}
  */
-export async function sendRequest(resolved, opts = {}) {
-  const { mode = 'direct', download = false, signal, agentPort, saveBinary = true } = opts
+async function fetchResolved(resolved, opts = {}) {
+  const { mode = 'direct', signal, agentPort } = opts
   const relayed = mode === 'proxy' || mode === 'agent' // target info travels in X-Curlion-* headers
   const headers = new Headers()
   const body = buildBody(resolved.body)
@@ -239,19 +238,42 @@ export async function sendRequest(resolved, opts = {}) {
   if (relayed && res.headers.get('x-curlion-error')) {
     throw new Error(`${mode === 'agent' ? 'Agent' : 'Proxy'} error: ${await res.text()}`)
   }
+  return { res, relayed, started }
+}
+
+/** Status, status text and headers of the target's response (relayed modes carry them in X-Curlion-*). */
+function responseMeta(res, relayed) {
+  const status = relayed ? Number(res.headers.get('x-curlion-status') || res.status) : res.status
+  const statusText = relayed ? res.headers.get('x-curlion-status-text') || res.statusText : res.statusText
+  let headers = []
+  if (relayed && res.headers.get('x-curlion-headers')) headers = JSON.parse(decodeURIComponent(res.headers.get('x-curlion-headers')))
+  else res.headers.forEach((value, key) => headers.push({ key, value }))
+  return { status, statusText, headers }
+}
+
+/**
+ * Open a response as a stream (Server-Sent Events): resolves once the headers arrive.
+ * @returns {{ status, statusText, headers: {key,value}[], body: ReadableStream, text(): Promise<string> }}
+ */
+export async function openStream(resolved, opts = {}) {
+  const { res, relayed } = await fetchResolved(resolved, opts)
+  return { ...responseMeta(res, relayed), body: res.body, text: () => res.text() }
+}
+
+/**
+ * Send a resolved request.
+ * @param resolved output of resolveRequest()
+ * @param opts { mode: 'direct'|'proxy'|'agent', agentPort, download: boolean, signal,
+ *   saveBinary: false to skip saving binary responses as files (Collection Runner) }
+ */
+export async function sendRequest(resolved, opts = {}) {
+  const { download = false, saveBinary = true } = opts
+  const { res, relayed, started } = await fetchResolved(resolved, opts)
 
   const blob = await res.blob()
   const time = Math.round(performance.now() - started)
 
-  const status = relayed ? Number(res.headers.get('x-curlion-status') || res.status) : res.status
-  const statusText = relayed ? res.headers.get('x-curlion-status-text') || res.statusText : res.statusText
-
-  let responseHeaders = []
-  if (relayed && res.headers.get('x-curlion-headers')) {
-    responseHeaders = JSON.parse(decodeURIComponent(res.headers.get('x-curlion-headers')))
-  } else {
-    res.headers.forEach((value, key) => responseHeaders.push({ key, value }))
-  }
+  const { status, statusText, headers: responseHeaders } = responseMeta(res, relayed)
   const hdrs = new Headers(responseHeaders.map((h) => [h.key, h.value]))
 
   const result = {

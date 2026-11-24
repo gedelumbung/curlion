@@ -1,4 +1,4 @@
-<!-- Connection log for WebSocket / Socket.IO requests (replaces the response pane). -->
+<!-- Connection log for WebSocket / Socket.IO / SSE requests (replaces the response pane). -->
 <script setup>
 import { computed, nextTick, ref, watch } from 'vue'
 import { ArrowDown, ArrowUp, Copy, Info, Search, Trash2, TriangleAlert } from 'lucide-vue-next'
@@ -62,7 +62,8 @@ const statusDot = { connecting: 'bg-amber-400 animate-pulse', open: 'bg-emerald-
       <span v-if="conn" class="inline-flex items-center gap-1.5 text-xs text-zinc-400">
         <span class="h-2 w-2 rounded-full" :class="statusDot[conn.status]"></span>{{ statusLabel[conn.status] }}
       </span>
-      <span v-if="conn" class="font-mono text-xs text-zinc-500">↑ {{ counts.out }} · ↓ {{ counts.in }}</span>
+      <span v-if="conn && conn.protocol === 'sse'" class="font-mono text-xs text-zinc-500">↓ {{ counts.in }} event{{ counts.in === 1 ? '' : 's' }}</span>
+      <span v-else-if="conn" class="font-mono text-xs text-zinc-500">↑ {{ counts.out }} · ↓ {{ counts.in }}</span>
       <div class="ml-auto flex h-7 items-center gap-1.5 rounded-md bg-zinc-900 px-2">
         <Search :size="13" class="text-zinc-500" />
         <input v-model="filter" placeholder="Filter" class="w-40 bg-transparent text-xs outline-none placeholder:text-zinc-600" />
@@ -71,7 +72,7 @@ const statusDot = { connecting: 'bg-amber-400 animate-pulse', open: 'bg-emerald-
     </div>
 
     <div ref="list" class="min-h-0 flex-1 overflow-y-auto pb-2 font-mono text-[12px]">
-      <p v-if="!conn" class="px-4 py-10 text-center font-sans text-sm text-zinc-500">Connect to start sending and receiving messages.</p>
+      <p v-if="!conn" class="px-4 py-10 text-center font-sans text-sm text-zinc-500">{{ req?.protocol === 'sse' ? 'Connect to watch events arrive.' : 'Connect to start sending and receiving messages.' }}</p>
       <div
         v-for="e in entries"
         :key="e.id"
@@ -85,6 +86,7 @@ const statusDot = { connecting: 'bg-amber-400 animate-pulse', open: 'bg-emerald-
           <TriangleAlert v-else-if="e.dir === 'error'" :size="13" class="mt-0.5 shrink-0 text-red-400" />
           <Info v-else :size="13" class="mt-0.5 shrink-0 text-zinc-500" />
           <span v-if="e.event" class="shrink-0 rounded bg-zinc-800 px-1.5 text-[11px] text-sky-300">{{ e.event }}</span>
+          <span v-if="e.eventId" class="shrink-0 text-[11px] text-zinc-500" title="Event id (sent back as Last-Event-ID when reconnecting)">#{{ e.eventId }}</span>
           <span class="min-w-0 flex-1" :class="[e.dir === 'error' ? 'text-red-400' : e.dir === 'info' ? 'font-sans text-xs text-zinc-500' : 'text-zinc-200', expanded.has(e.id) ? '' : 'truncate']">{{ text(e.data) }}</span>
           <button v-if="e.dir === 'in' || e.dir === 'out'" class="shrink-0 rounded p-0.5 text-zinc-500 opacity-0 group-hover:opacity-100 hover:text-zinc-100" title="Copy" @click.stop="copyText(text(e.data))"><Copy :size="12" /></button>
           <span class="shrink-0 text-[11px] text-zinc-600">{{ time(e.ts) }}</span>

@@ -29,6 +29,7 @@ export const PROTOCOLS = [
   { id: 'graphql', label: 'GraphQL' },
   { id: 'ws', label: 'WebSocket' },
   { id: 'socketio', label: 'Socket.IO' },
+  { id: 'sse', label: 'SSE' },
   { id: 'grpc', label: 'gRPC' },
 ]
 export const protocolOf = (req) => req?.protocol || 'http'
@@ -39,6 +40,7 @@ export const PROTOCOL_DEFAULTS = {
   ws: () => ({ message: '', format: 'text', protocols: '', saved: [] }), // saved: { id, name, body }
   socketio: () => ({ path: '/socket.io', event: 'message', args: '', ack: false, auth: '', listen: ['message'], transports: 'websocket', saved: [] }),
   grpc: () => ({ proto: '', protoName: '', service: '', method: '', message: '{}', tls: false }),
+  sse: () => ({ reconnect: false, lastEventId: '' }), // reconnect like EventSource when the stream ends
 }
 
 /** Make sure a request has the settings object for its protocol (mutates, returns it). */
@@ -83,7 +85,7 @@ export function newRequest(name = 'New Request', patch = {}) {
     id: uid(),
     type: 'request',
     name,
-    protocol: 'http', // http | graphql | ws | socketio | grpc
+    protocol: 'http', // http | graphql | ws | socketio | grpc | sse
     method: 'GET',
     url: '',
     description: '', // shown on the published docs page

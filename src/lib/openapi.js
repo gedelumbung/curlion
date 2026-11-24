@@ -7,7 +7,7 @@
 // - The global security requirement becomes the collection's auth (inherited by requests);
 //   operations with other requirements get their own. Secrets become {{variables}}.
 import { parse as parseYaml } from 'yaml'
-import { AUTH_DEFAULTS, kv, newAuth, newCollection, newFolder, newRequest, newSample, uid } from './model.js'
+import { AUTH_DEFAULTS, PROTOCOL_DEFAULTS, kv, newAuth, newCollection, newFolder, newRequest, newSample, uid } from './model.js'
 import { ImportError } from './postman.js'
 
 const METHODS = ['get', 'post', 'put', 'patch', 'delete', 'head', 'options']
@@ -209,6 +209,13 @@ function requestFor(path, method, pathItem, op, schemes, globalReq, ctx) {
     .join('\n\n')
 
   req.samples = samplesFor(op, ctx)
+  // operations that answer with an event stream become SSE requests
+  const streams = Object.entries(op.responses || {}).some(([code, r]) => /^2/.test(code) && Object.keys(deref(r, ctx)?.content || {}).some((t) => /text\/event-stream/i.test(t)))
+  if (streams || (ctx.v2 && (op.produces || []).some((t) => /text\/event-stream/i.test(t)))) {
+    req.protocol = 'sse'
+    req.sse = PROTOCOL_DEFAULTS.sse()
+    req.samples = req.samples.filter((x) => !/event-stream/i.test(x.headers[0]?.value || ''))
+  }
   return req
 }
 

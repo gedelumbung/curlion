@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Curlion — Free API Client & Lightweight Postman Alternative</title>
-    <meta name="description" content="Free, local-first API client for your browser: REST, GraphQL, WebSocket, Socket.IO, gRPC. A lightweight Postman, Insomnia, Bruno and Hoppscotch alternative." />
+    <meta name="description" content="Free, local-first API client for your browser: REST, GraphQL, WebSocket, Socket.IO, SSE, gRPC. A lightweight Postman, Insomnia, Bruno and Hoppscotch alternative." />
     <meta name="author" content="Gede Lumbung" />
     <meta name="robots" content="index, follow, max-image-preview:large" />
     <meta name="theme-color" content="#0b0e14" />
@@ -38,7 +38,7 @@
       "url": "https://curlion-app.netlify.app/landing/",
       "applicationCategory": "DeveloperApplication",
       "operatingSystem": "Any (web browser)",
-      "description": "Free, local-first API client for your browser. Send REST, GraphQL, WebSocket, Socket.IO and gRPC requests, share environments with your team, import Postman collections and OpenAPI specs, test responses and publish API docs.",
+      "description": "Free, local-first API client for your browser. Send REST, GraphQL, WebSocket, Socket.IO, Server-Sent Events and gRPC requests, share environments with your team, import Postman collections and OpenAPI specs, test responses and publish API docs.",
       "alternateName": "Curlion API client",
       "offers": {
         "@type": "Offer",
@@ -52,7 +52,7 @@
         "https://curlion-app.netlify.app/landing/img/docs.webp"
       ],
       "featureList": [
-        "REST, GraphQL, WebSocket, Socket.IO and gRPC requests",
+        "REST, GraphQL, WebSocket, Socket.IO, Server-Sent Events (SSE) and gRPC requests",
         "Local-first storage in the browser (IndexedDB)",
         "Postman Collection v2.1 import and export, and cURL import",
         "OpenAPI 3.x and Swagger 2.0 import (JSON or YAML, from a file or a URL)",
@@ -123,7 +123,7 @@
           "name": "Which protocols does Curlion support?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "HTTP/REST, GraphQL (with a schema explorer), WebSocket, Socket.IO and gRPC. gRPC needs the Curlion Agent, which also lets any request reach localhost or a self-signed server. Server-Sent Events (SSE) testing is on the roadmap."
+            "text": "HTTP/REST, GraphQL (with a schema explorer), WebSocket, Socket.IO, Server-Sent Events (SSE) and gRPC. SSE streams can send custom headers, auth and a request body, which a browser's EventSource cannot. gRPC needs the Curlion Agent, which also lets any request reach localhost or a self-signed server."
           }
         },
         {
@@ -298,15 +298,6 @@
       .faq details[open] summary::after { transform: rotate(-135deg); margin-top: 4px; }
       .faq p { padding: 0 22px 20px; font-size: 16px; color: var(--text); }
 
-      /* ---------- roadmap ---------- */
-      .road { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 32px; align-items: center; max-width: 960px; margin-inline: auto; padding: 36px; border: 1px dashed #3a4152; border-radius: var(--radius); background: linear-gradient(180deg, var(--panel), var(--bg-soft)); }
-      .pill { display: inline-flex; align-items: center; gap: 7px; border: 1px solid rgba(230, 180, 80, 0.35); border-radius: 999px; padding: 3px 11px; background: rgba(230, 180, 80, 0.1); color: var(--accent); font-size: 12.5px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; }
-      .pill i { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
-      .road h3 { margin-top: 16px; color: var(--strong); font-size: clamp(22px, 2.6vw, 28px); line-height: 1.2; letter-spacing: -0.02em; font-weight: 800; text-wrap: balance; }
-      .road p { margin-top: 12px; font-size: 16px; color: var(--text); }
-      .road figure { margin: 0; min-width: 0; }
-      .road pre { margin: 0; }
-      .road figcaption { margin-top: 10px; font-size: 13px; color: var(--muted); }
 
       /* ---------- final CTA / footer ---------- */
       .final { position: relative; margin-top: 120px; padding: 96px 0; text-align: center; overflow: hidden; border-top: 1px solid var(--line); background: var(--bg-soft); }
@@ -330,7 +321,6 @@
       @media (max-width: 1000px) {
         .grid { grid-template-columns: repeat(2, 1fr); }
         .alts { grid-template-columns: repeat(2, 1fr); }
-        .road { grid-template-columns: 1fr; padding: 28px; }
         .row, .row.flip { grid-template-columns: 1fr; gap: 32px; }
         .row.flip .copy { order: 0; }
         .steps { grid-template-columns: 1fr; }
@@ -345,7 +335,6 @@
         .row + .row { margin-top: 80px; }
         .head { margin-bottom: 40px; }
         .grid, .themes, .alts { grid-template-columns: 1fr; }
-        .road { padding: 22px; }
         .btn { padding: 13px 20px; }
         .final { padding: 72px 0; margin-top: 88px; }
         .foot-top, .foot-bottom { flex-direction: column; align-items: flex-start; }
@@ -399,7 +388,7 @@
       <div class="strip">
         <div class="wrap">
           <ul>
-            <li><b>5</b><span>protocols in one workspace</span></li>
+            <li><b>6</b><span>protocols in one workspace</span></li>
             <li><b>7</b><span>code-snippet languages</span></li>
             <li><b>8</b><span>themes, dark &amp; light</span></li>
             <li><b>$0</b><span>to run on free tiers</span></li>
@@ -425,7 +414,7 @@
             <article class="card">
               <span class="ico"><svg viewBox="0 0 24 24"><path d="m12 2 10 5-10 5L2 7z" /><path d="m2 17 10 5 10-5" /><path d="m2 12 10 5 10-5" /></svg></span>
               <h3>Every protocol</h3>
-              <p>HTTP, GraphQL with a schema explorer, WebSocket, Socket.IO and gRPC — all in the same tabbed workspace.</p>
+              <p>HTTP, GraphQL with a schema explorer, WebSocket, Socket.IO, Server-Sent Events and gRPC — all in the same tabbed workspace.</p>
             </article>
             <article class="card">
               <span class="ico"><svg viewBox="0 0 24 24"><path d="M13 2 3 14h9l-1 8 10-12h-9z" /></svg></span>
@@ -511,11 +500,12 @@
           <div class="row flip">
             <div class="copy">
               <span class="kicker">Protocols</span>
-              <h3>One client, five protocols.</h3>
+              <h3>One client, six protocols.</h3>
               <p>Switch a request between protocols from the URL bar and keep everything in the same collection.</p>
               <ul>
                 <li><b>GraphQL</b> with query and variables editors and a schema explorer</li>
                 <li><b>WebSocket</b> and <b>Socket.IO</b> with a live message log</li>
+                <li><b>Server-Sent Events</b> with headers, auth and a body, events streamed live</li>
                 <li><b>gRPC</b> from a pasted or uploaded <code>.proto</code> file, through the Agent</li>
                 <li>Send <b>Direct</b>, via the <b>Proxy</b>, or through the <b>Agent</b></li>
               </ul>
@@ -640,7 +630,7 @@
             </article>
             <article class="card">
               <h3>Yaak alternative</h3>
-              <p>Yaak is a desktop API client for REST, GraphQL, gRPC, WebSocket and SSE. Curlion covers REST, GraphQL, WebSocket, Socket.IO and gRPC in the browser, so there is no desktop app to install or update.</p>
+              <p>Yaak is a desktop API client for REST, GraphQL, gRPC, WebSocket and SSE. Curlion covers REST, GraphQL, WebSocket, Socket.IO, SSE and gRPC in the browser, so there is no desktop app to install or update.</p>
             </article>
             <article class="card">
               <h3>Thunder Client alternative</h3>
@@ -652,33 +642,6 @@
             </article>
           </div>
           <p class="fine">Postman, Insomnia, Bruno, Yaak, Thunder Client and Hoppscotch are trademarks of their respective owners. Curlion is an independent project and is not affiliated with or endorsed by them. Descriptions of other tools are summaries and may change; check each project for current details.</p>
-        </div>
-      </section>
-
-      <!-- ================= Roadmap ================= -->
-      <section id="roadmap">
-        <div class="wrap">
-          <div class="head">
-            <span class="kicker">Roadmap</span>
-            <h2>What’s coming next.</h2>
-            <p>Curlion is still growing. Here’s what is planned, so you know where it’s heading.</p>
-          </div>
-          <div class="road">
-            <div>
-              <span class="pill"><i></i> Planned</span>
-              <h3>Server-Sent Events (SSE) testing</h3>
-              <p>Connect to a <code>text/event-stream</code> endpoint and watch events arrive live in the message log, next to WebSocket and Socket.IO, with the same variables, auth and headers you already use.</p>
-            </div>
-            <figure>
-              <pre>GET {{baseUrl}}/prices/stream
-Accept: text/event-stream
-
-event: price.updated
-id: 42
-data: {"sku":"p_1042","price":84.9}</pre>
-              <figcaption>Illustration of an SSE stream. Not available yet.</figcaption>
-            </figure>
-          </div>
         </div>
       </section>
 
@@ -744,7 +707,7 @@ VITE_SUPABASE_ANON_KEY</pre>
             </details>
             <details>
               <summary>Which protocols does Curlion support?</summary>
-              <p>HTTP/REST, GraphQL (with a schema explorer), WebSocket, Socket.IO and gRPC. gRPC needs the Curlion Agent, which also lets any request reach localhost or a self-signed server. Server-Sent Events (SSE) testing is on the roadmap.</p>
+              <p>HTTP/REST, GraphQL (with a schema explorer), WebSocket, Socket.IO, Server-Sent Events (SSE) and gRPC. SSE streams can send custom headers, auth and a request body, which a browser's EventSource cannot. gRPC needs the Curlion Agent, which also lets any request reach localhost or a self-signed server.</p>
             </details>
             <details>
               <summary>Is Curlion free?</summary>

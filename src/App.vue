@@ -261,7 +261,7 @@ const syncLabel = {
             @pointerdown="startDrag('split', $event)"
             @dblclick="resetPane('split')"
           ></div>
-          <MessageLog v-if="activeRequest.protocol === 'ws' || activeRequest.protocol === 'socketio'" :key="'log' + activeRequest.id" class="min-h-0 flex-1" />
+          <MessageLog v-if="['ws', 'socketio', 'sse'].includes(activeRequest.protocol)" :key="'log' + activeRequest.id" class="min-h-0 flex-1" />
           <ResponseViewer v-else :key="activeRequest.id" class="min-h-0 flex-1" />
         </div>
         <CollectionOverview v-else-if="activeOverview" :key="activeOverview.id" :collection="activeOverview" @collection="openCollection" @settings="openContainer" @run="openRunner" />

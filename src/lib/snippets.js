@@ -39,6 +39,10 @@ const PROTOCOL_LANGS = {
   ],
   socketio: [{ id: 'socketio-js', label: 'JavaScript (socket.io-client)', cm: 'text' }],
   grpc: [{ id: 'grpcurl', label: 'grpcurl (CLI)', cm: 'text' }],
+  sse: [
+    { id: 'curl-sse', label: 'cURL (Bash)', cm: 'text' },
+    { id: 'sse-js', label: 'JavaScript', cm: 'text' },
+  ],
 }
 export const snippetLangsFor = (protocol) => PROTOCOL_LANGS[protocol] || SNIPPET_LANGS
 
@@ -57,6 +61,10 @@ export function generateSnippet(lang, r, req = {}) {
       return socketioJs(r, req)
     case 'grpcurl':
       return grpcurl(r, req)
+    case 'curl-sse':
+      return curl(r).replace(/^curl /, 'curl --no-buffer ')
+    case 'sse-js':
+      return sseJs(r)
     case 'curl':
       return curl(r)
     case 'fetch':
@@ -346,4 +354,39 @@ const safeJson = (t) => {
   } catch {
     return '{}'
   }
+}
+
+/** EventSource when it can do the job (GET, no custom headers), else fetch with a stream reader. */
+function sseJs(r) {
+  const extra = r.headers.filter((h) => h.key.toLowerCase() !== 'accept')
+  if (r.method === 'GET' && !extra.length) {
+    return [
+      `const events = new EventSource(${js(r.url)})`,
+      '',
+      'events.onmessage = (e) => console.log(e.data)',
+      "// named events: events.addEventListener('my-event', (e) => console.log(e.data))",
+      "events.onerror = () => console.log('connection lost; the browser reconnects')",
+    ].join('\n')
+  }
+  // the fetch snippet up to (not including) its fetch() call, which is replaced by an awaited one
+  const setup = fetchJs(r).split('\nfetch(')[0]
+  return [
+    '// EventSource cannot send custom headers or a body, so read the stream with fetch',
+    setup,
+    `const response = await fetch(${js(r.url)}, requestOptions)`,
+    '',
+    'const reader = response.body.pipeThrough(new TextDecoderStream()).getReader()',
+    'let buffer = ""',
+    'for (;;) {',
+    '  const { value, done } = await reader.read()',
+    '  if (done) break',
+    '  buffer += value',
+    '  const events = buffer.split(/\\r?\\n\\r?\\n/)',
+    '  buffer = events.pop()',
+    '  for (const block of events) {',
+    '    const data = block.split(/\\r?\\n/).filter((l) => l.startsWith("data:")).map((l) => l.slice(5).trimStart()).join("\\n")',
+    '    if (data) console.log(data)',
+    '  }',
+    '}',
+  ].join('\n')
 }

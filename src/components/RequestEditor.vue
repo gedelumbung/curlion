@@ -56,6 +56,7 @@ const URL_PLACEHOLDER = {
   ws: 'wss://example.com/socket',
   socketio: 'http://localhost:3000',
   grpc: 'localhost:50051  (grpcs:// for TLS)',
+  sse: 'https://api.example.com/events',
 }
 const conn = computed(() => state.conns[req.value?.id] || null)
 
@@ -260,6 +261,7 @@ const TABS = {
   ws: ['message', 'params', 'headers', 'auth', 'settings', 'docs'],
   socketio: ['message', 'headers', 'settings', 'docs'],
   grpc: ['message', 'metadata', 'auth', 'proto', 'settings', 'docs'],
+  sse: ['params', 'auth', 'headers', 'body', 'settings', 'docs'],
 }
 const tabs = computed(() => (TABS[protocol.value] || TABS.http).map((id) => T[id]))
 // switching to a request of another protocol: show its first tab
@@ -309,7 +311,7 @@ defineExpose({ applyCurl })
           title="Request type"
           @update:model-value="setProtocol"
         />
-        <UiSelect v-if="protocol === 'http'" v-model="req.method" :options="methodOptions" class="w-28 shrink-0" button-class="border-r border-zinc-700 bg-zinc-900 px-3 text-sm font-semibold" />
+        <UiSelect v-if="protocol === 'http' || protocol === 'sse'" v-model="req.method" :options="methodOptions" class="w-28 shrink-0" button-class="border-r border-zinc-700 bg-zinc-900 px-3 text-sm font-semibold" />
         <VarInput
           :model-value="req.url"
           class="flex-1 self-center px-3 py-2"
@@ -331,7 +333,7 @@ defineExpose({ applyCurl })
       </div>
       <!-- WebSocket / Socket.IO: connect -->
       <button
-        v-if="protocol === 'ws' || protocol === 'socketio'"
+        v-if="protocol === 'ws' || protocol === 'socketio' || protocol === 'sse'"
         class="inline-flex min-w-32 items-center justify-center gap-2 rounded-md px-4 text-sm font-semibold"
         :class="conn?.status === 'open' || conn?.status === 'connecting' ? 'bg-zinc-800 text-zinc-100 hover:bg-zinc-700' : 'bg-orange-500 text-on-accent hover:bg-orange-600'"
         @click="conn?.status === 'open' || conn?.status === 'connecting' ? disconnectRealtime(req.id) : connectRealtime()"
@@ -389,6 +391,23 @@ defineExpose({ applyCurl })
     <div class="min-h-0 flex-1 overflow-auto py-2">
       <!-- GraphQL -->
       <GraphqlPanel v-if="protocol === 'graphql' && ['query', 'variables', 'schema'].includes(tab)" :request="req" :view="tab" class="h-full" @view="tab = $event" />
+      <!-- Server-Sent Events -->
+      <div v-else-if="protocol === 'sse' && tab === 'settings'" class="max-w-2xl space-y-4 px-4 py-2 text-sm">
+        <label class="flex items-start gap-2 text-zinc-300">
+          <input v-model="req.sse.reconnect" type="checkbox" class="mt-1 accent-orange-500" />
+          <span>Reconnect when the stream ends, like <code>EventSource</code>
+            <span class="block text-xs text-zinc-500">Waits for the server's <code>retry:</code> delay (3 s by default) and sends the last event id as <code>Last-Event-ID</code>. Leave off for streams that end on purpose, such as LLM responses.</span>
+          </span>
+        </label>
+        <div>
+          <label class="mb-1 block text-xs text-zinc-500">Last-Event-ID for the first connection <span class="text-zinc-600">(optional: resume a stream)</span></label>
+          <VarInput v-model="req.sse.lastEventId" placeholder="e.g. 42" class="field" />
+        </div>
+        <p class="text-xs text-zinc-500">
+          Events arrive in the message log below. Unlike <code>EventSource</code>, Curlion can send custom headers, auth and a request body (pick POST).
+          Direct mode needs CORS on the server; Agent mode reaches localhost without it. In Proxy mode the hosting provider may end long-running streams.
+        </p>
+      </div>
       <!-- WebSocket / Socket.IO -->
       <RealtimePanel v-else-if="(protocol === 'ws' || protocol === 'socketio') && ['message', 'settings'].includes(tab)" :request="req" :view="tab" class="h-full" />
       <!-- gRPC -->

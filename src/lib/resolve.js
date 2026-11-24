@@ -69,6 +69,8 @@ export function resolveRequest(req, scope, opts = {}) {
   if (url && protocol !== 'grpc' && !/^[a-z][a-z0-9+.-]*:\/\//i.test(url) && !url.startsWith('{{')) url = (protocol === 'ws' ? 'ws://' : 'http://') + url
 
   const headers = enabled(req.headers).map((h) => ({ key: I(h.key), value: I(h.value) }))
+  // Server-Sent Events: ask for an event stream unless the request says otherwise
+  if (protocol === 'sse' && !hasHeader(headers, 'accept')) headers.push({ key: 'Accept', value: 'text/event-stream' })
 
   // Auth
   const a = req.auth || { type: 'none' }

@@ -14,6 +14,7 @@ const PROTOCOL_BADGE = {
   ws: { label: 'WS', class: 'text-teal-400' },
   socketio: { label: 'SIO', class: 'text-sky-400' },
   grpc: { label: 'gRPC', class: 'text-violet-400' },
+  sse: { label: 'SSE', class: 'text-amber-300' },
 }
 const SHORT_METHOD = { DELETE: 'DEL', OPTIONS: 'OPT' }
 export function requestBadge(req, { short = false } = {}) {

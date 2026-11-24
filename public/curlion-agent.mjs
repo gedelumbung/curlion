@@ -21,7 +21,7 @@ import zlib from 'node:zlib'
 import crypto from 'node:crypto'
 import { pipeline } from 'node:stream/promises'
 
-const VERSION = '1.1.0' // 1.1: gRPC (HTTP/2) and WebSocket bridge
+const VERSION = '1.2.0' // 1.1: gRPC (HTTP/2) and WebSocket bridge; 1.2: no idle timeout on Server-Sent Events streams
 
 // ---- options ----------------------------------------------------------------
 const args = process.argv.slice(2)
@@ -81,7 +81,11 @@ async function readBody(req) {
 function once(url, method, headers, body) {
   return new Promise((resolve, reject) => {
     const lib = url.protocol === 'https:' ? https : http
-    const req = lib.request(url, { method, headers, rejectUnauthorized: STRICT_TLS }, resolve)
+    const req = lib.request(url, { method, headers, rejectUnauthorized: STRICT_TLS }, (res) => {
+      // event streams may stay quiet for minutes between events: no idle timeout once they are open
+      if (/text\/event-stream/i.test(res.headers['content-type'] || '')) req.setTimeout(0)
+      resolve(res)
+    })
     req.on('error', reject)
     req.setTimeout(120_000, () => req.destroy(new Error('timed out after 120s')))
     if (body?.length) req.write(body)
